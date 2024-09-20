@@ -1,48 +1,46 @@
 {
-  description = "plutarch-template";
+  description = "Airdrop";
 
-  # nixConfig = {
-  #   extra-experimental-features = [ "nix-command" "flakes" "ca-derivations" ];
-  #   extra-substituters = [ "https://cache.iog.io" ];
-  #   extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
-  #   allow-import-from-derivation = "true";
-  #   bash-prompt = "\\[\\e[0;92m\\][\\[\\e[0;92m\\]nix develop:\\[\\e[0;92m\\]\\w\\[\\e[0;92m\\]]\\[\\e[0;92m\\]$ \\[\\e[0m\\]";
-  #   max-jobs = "auto";
-  #   auto-optimise-store = "true";
-  # };
 
   inputs = {
-    tooling.url = "github:mlabs-haskell/mlabs-tooling.nix";
-    plutarch.url = "github:Plutonomicon/plutarch";
-    ply.url = "github:mlabs-haskell/ply?ref=master";
-    plutus-simple-model.url = "github:mlabs-haskell/plutus-simple-model";
-    liqwid-libs.url = "github:Liqwid-Labs/liqwid-libs";
+    iogx = {
+      url = "github:input-output-hk/iogx";
+      inputs.hackage.follows = "hackage";
+      inputs.CHaP.follows = "CHaP";
+      inputs.haskell-nix.follows = "haskell-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    nixpkgs.follows = "haskell-nix/nixpkgs";
+    iohk-nix.url = "github:input-output-hk/iohk-nix";
+    iohk-nix.inputs.nixpkgs.follows = "haskell-nix/nixpkgs";
+
+    hackage = {
+      url = "github:input-output-hk/hackage.nix";
+      flake = false;
+    };
+
+    CHaP = {
+      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+      flake = false;
+    };
+
+    haskell-nix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.hackage.follows = "hackage";
+    };
+
+    plutarch = {
+      url = "github:Plutonomicon/plutarch-plutus/e50661e24670974b398be19426617bc6389fdac6";
+    };
   };
 
-  outputs = inputs@{ self, tooling, plutus-simple-model, plutarch, ply, liqwid-libs }: tooling.lib.mkFlake { inherit self; }
-    {
-      imports = [
-        (tooling.lib.mkHaskellFlakeModule1 {
-          project.src = ./.;
-          project.shell.withHoogle = true;
-          project.modules = [
-            ({ config, ... }: {
-              packages.plutus-simple-model.doHaddock = false;
-            })
-          ];
-          project.extraHackage = [
-            "${plutus-simple-model}"
-            "${plutarch}"
-            "${plutarch}/plutarch-extra"
-            "${ply}/ply-core"
-            "${ply}/ply-plutarch"
-            "${liqwid-libs}/liqwid-plutarch-extra"
-            "${liqwid-libs}/plutarch-quickcheck"
-            "${liqwid-libs}/plutarch-unit"
-            "${liqwid-libs}/liqwid-script-export"
-            "${liqwid-libs}/plutarch-context-builder"
-          ];
-        })
-      ];
-    };
+
+  outputs = inputs: inputs.iogx.lib.mkFlake {
+    inherit inputs;
+    repoRoot = ./.;
+    outputs = import ./nix/outputs.nix;
+    systems = [ "x86_64-linux" "x86_64-darwin" ];
+  };
+
 }

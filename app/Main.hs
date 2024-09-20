@@ -34,9 +34,6 @@ import PlutusLedgerApi.V2 (
   Data,
   ExBudget,
  )
-import Ply.Plutarch (
-  writeTypedScript,
- )
 import PriceDiscoveryEvent.Mint.Standard (mkDiscoveryNodeMPW)
 import PriceDiscoveryEvent.MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, prewardFoldValidatorW)
 import PriceDiscoveryEvent.Validator (pDiscoverySetValidator, pDiscoverGlobalLogicW)

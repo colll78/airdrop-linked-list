@@ -1,16 +1,5 @@
-# Price Discovery Event / Liquidity Bootstrapping Smart Contracts  
+# Trustless Airdrop Smart Contracts  
 
-Open-source contracts for conducting permissionless price discovery / liquidity bootstrapping events to launch your token in a fair, tamperproof manner. 
-
-The Discovery Smart Contracts were developed through the collaborative efforts of Anastasia Labs and Ikigai Technologies.
-
-https://anastasialabs.com/
-
-https://ikigaitech.org
-
-https://beta.grabbit.market
-
-https://cardano.ideascale.com/c/idea/103903
 
 # Set up nix config 
 Put the following lines in your nix configuration file (usually located at /etc/nix/nix.conf)

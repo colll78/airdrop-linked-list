@@ -1,5 +1,5 @@
 cabal-version:      3.0
-name:               plutarch-template
+name:               plutarch-airdrop
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -167,18 +167,14 @@ library
     
   import:          lang
   exposed-modules:
+    MerkleTree.Helpers
+    MerkleTree.Merkling
+    MerkleTree.MerklePatriciaForestry
     Types.Classes
     Types.Constants
     Types.DiscoverySet 
     Types.LiquiditySet
     PriceDiscoveryEvent.Utils
-    PriceDiscoveryEvent.Mint.Common
-    PriceDiscoveryEvent.Mint.Helpers
-    PriceDiscoveryEvent.Mint.Standard
-    PriceDiscoveryEvent.MultiFold
-    PriceDiscoveryEvent.MultiFoldLiquidity
-    PriceDiscoveryEvent.Validator
-    PriceDiscoveryEvent.ProjectTokenHolder
     LiquidityEvent.Mint.Standard
     LiquidityEvent.Mint.Common 
     LiquidityEvent.Validator
@@ -196,13 +192,8 @@ library
     , data-default
     , plutarch
     , plutarch-extra
-    , liqwid-plutarch-extra
-    , plutus-core
     , plutus-ledger-api
-    , plutus-simple-model
     , plutus-tx
-    , ply-core
-    , ply-plutarch
     , serialise
     , text
 
@@ -219,19 +210,15 @@ common dependencies
     , cborg
     , data-default
     , directory
-    , liqwid-plutarch-extra
     , plutarch
     , plutarch-extra
     , plutus-core
     , plutus-ledger-api
-    , plutus-simple-model
     , plutus-tx
-    , ply-core
-    , ply-plutarch
     , serialise
     , text
 
-executable plutarch-template
+executable plutarch-airdrop
   import:         lang, dependencies
   main-is:        Main.hs
 

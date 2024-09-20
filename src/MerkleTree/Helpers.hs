@@ -1,12 +1,12 @@
 
+module MerkleTree.Helpers where
+  
 import Plutarch.ByteString (PByteString, pconsBS, psliceBS, plengthBS, pindexBS)
 import Plutarch.Builtin (pblake2b_256)
 import Plutarch.Integer (PInteger)
 import Plutarch.Bool (PBool, (#==))
 import Plutarch.Lift (pconstant)
 import Plutarch.Prelude
-
-module MerkleTree.Helpers where
     
 -- Combine two ByteArrays using blake2b_256 hash
 pcombine :: Term s (PByteString :--> PByteString :--> PByteString)
