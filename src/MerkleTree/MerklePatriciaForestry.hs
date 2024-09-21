@@ -5,10 +5,8 @@ import Plutarch.ByteString (PByteString)
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl, pconstant)
 import Plutarch.TryFrom (PTryFrom(..))
 import Plutarch.DataRepr (PDataFields, PIsDataReprInstances(..), DerivePConstantViaData(..))
-import Plutarch.Builtin (pblake2b_256, psliceByteString)
-
-import qualified PlutusCore as PLC
-import qualified PlutusCore.Data as PLC
+import Plutarch.Crypto (pblake2b_256, psliceByteString)
+import MerkleTree.Helpers
 
 -- Constants
 

@@ -5,7 +5,7 @@ module PlutarchMain (main) where
 
 import Data.Default (Default (def))
 import Plutarch
-import Plutarch.Api.V1 
+import Plutarch.LedgerApi.V1 
 import Plutarch.Builtin
 import Plutarch.Context
 import Plutarch.Lift
@@ -18,10 +18,10 @@ import PlutusLedgerApi.V1.Value as Value
 import PlutusLedgerApi.V2 (PubKeyHash (..), always, Map, Address(..), fromList)
 import PlutusLedgerApi.V2.Contexts
 import Vulcan.Common.Types.Auction (Positive)
-import Plutarch.Api.V1.AssocMap
+import Plutarch.LedgerApi.V1.AssocMap
 import Plutarch.Positive (PPositive, ptryPositive)
 import Ledger.Exports.V1 (Credential(..))
-import qualified Plutarch.Api.V1.AssocMap as Map
+import qualified Plutarch.LedgerApi.V1.AssocMap as Map
 import  Plutarch.Bool
 import PlutusTx qualified 
 import PlutusTx.Prelude qualified as PlutusTx

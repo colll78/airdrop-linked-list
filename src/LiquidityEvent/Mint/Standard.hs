@@ -6,12 +6,8 @@ module LiquidityEvent.Mint.Standard (
   mkLiquidityNodeMPW,
 ) where
 
-import Plutarch.Api.V2 (
-  PMintingPolicy,
-  PScriptContext,
-  PTxOutRef,
- )
-import Plutarch.Extra.Interval (pafter, pbefore)
+import Plutarch.LedgerApi.V2 
+import Plutarch.LedgerApi.Interval (pafter, pbefore)
 
 --  pRemoveAndDeinit,
 

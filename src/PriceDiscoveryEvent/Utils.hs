@@ -4,33 +4,60 @@
 module PriceDiscoveryEvent.Utils where
 
 import Data.Text qualified as T
-import Plutarch.Api.V1 (AmountGuarantees (Positive), KeyGuarantees (Sorted), PCredential (PPubKeyCredential, PScriptCredential))
-import Plutarch.Api.V1.Scripts (PScriptHash)
-import Plutarch.Api.V1.Value (padaSymbol, pvalueOf, pnormalize)
-import Plutarch.Api.V1.AssocMap qualified as AssocMap
-
-import Plutarch.Api.V2 (
-  PAddress,
-  PCurrencySymbol,
-  PMap (PMap),
-  PPubKeyHash,
-  PTokenName,
-  PTxInInfo,
-  PTxOut,
-  PTxOutRef,
-  PValue (..),
- )
+import Plutarch.LedgerApi.V1 (PPosixTime(..), PScriptHash, AmountGuarantees (Positive), KeyGuarantees (Sorted), PCredential (PPubKeyCredential, PScriptCredential))
+import Plutarch.LedgerApi.Value (padaSymbol, pvalueOf, pnormalize)
+import Plutarch.LedgerApi.AssocMap qualified as AssocMap
+import Plutarch.LedgerApi.V2 
 import Plutarch.Bool (pand')
-import "liqwid-plutarch-extra" Plutarch.Extra.List (plookupAssoc)
-import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pmatchC)
+import Plutarch.TermCont 
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
-import Plutarch.Api.V1 (AmountGuarantees(..))
-import qualified Plutarch.Api.V1.Value as Value
-import Plutarch.Api.V2 (PInterval)
-import Plutarch.Api.V1 (PPOSIXTime)
-import Plutarch.Api.V2 (PExtended(PFinite))
+import qualified Plutarch.LedgerApi.Value as Value
 import Plutarch.Internal
+import Plutarch.Builtin
+import Plutarch.DataRepr.Internal.Field
+    ( HRec(..), Labeled(Labeled) )  
+
+type PScriptInfoHRec (s :: S) =
+  HRec
+    '[ '("_0", Term s (PAsData PTxOutRef))
+     , '("_1", Term s (PAsData (PMaybeData PDatum)))
+     ]
+
+pletFieldsSpending ::  forall {s :: S} {r :: PType}. Term s PData -> (PScriptInfoHRec s -> Term s r) -> Term s r 
+pletFieldsSpending term = runTermCont $ do
+  constrPair <- tcont $ plet $ pasConstr # term
+  fields <- tcont $ plet $ psndBuiltin # constrPair
+  checkedFields <- tcont $ plet $ pif ((pfstBuiltin # constrPair) #== 1) fields perror
+  let outRef = punsafeCoerce @_ @_ @(PAsData PTxOutRef) $ phead # checkedFields
+      datum = punsafeCoerce @_ @_ @(PAsData (PMaybeData PDatum)) $ phead # (ptail # checkedFields)
+  tcont $ \f -> f $ HCons (Labeled @"_0" outRef) (HCons (Labeled @"_1" datum) HNil)
+
+
+ptryFromInlineDatum :: forall (s :: S). Term s (POutputDatum :--> PDatum)
+ptryFromInlineDatum = phoistAcyclic $
+  plam $
+    flip pmatch $ \case
+      POutputDatum ((pfield @"outputDatum" #) -> datum) -> datum
+      _ -> ptraceError "not an inline datum"
+
+pfromPDatum ::
+  forall (a :: S -> Type) (s :: S).
+  PTryFrom PData a =>
+  Term s (PDatum :--> a)
+pfromPDatum = phoistAcyclic $ plam $ flip ptryFrom fst . pto
+
+
+pnonew :: forall {a :: PType} {b :: PType} {s :: S}.
+                ((PInner a :: PType) ~ (PDataNewtype b :: PType), PIsData b) =>
+                Term s a -> Term s b
+pnonew nt = pmatch (pto nt) $ \(PDataNewtype bs) -> pfromData bs  
+
+punnew :: forall {b :: PType} {s :: S}.
+                PIsData b =>
+                Term s (PDataNewtype b) -> Term s b
+punnew nt = pmatch nt $ \(PDataNewtype bs) -> pfromData bs
+
 data PTriple (a :: PType) (b :: PType) (c :: PType) (s :: S)
   = PTriple (Term s a) (Term s b) (Term s c)
   deriving stock (Generic)
@@ -72,7 +99,12 @@ pfindCurrencySymbolsByTokenPrefix = phoistAcyclic $
   plam $ \value prefix ->
     plet (pisPrefixOf # prefix) $ \prefixCheck ->
       let mapVal = pto (pto value)
-          isPrefixed = pfilter # plam (\csPair -> pany # plam (\tk -> prefixCheck # pto (pfromData (pfstBuiltin # tk))) # (pto $ pfromData (psndBuiltin # csPair))) # mapVal
+          isPrefixed = pfilter # plam (\csPair -> 
+            pany # plam (\tkPair -> 
+              pmatch (pto (pfromData $ pfstBuiltin # tkPair)) $ \(PDataNewtype tkn) ->
+                  prefixCheck # pfromData tkn 
+              ) # (pto $ pfromData (psndBuiltin # csPair))
+            ) # mapVal 
        in pmap # pfstBuiltin # isPrefixed
 
 pcountScriptInputs :: Term s (PBuiltinList PTxInInfo :--> PInteger)
@@ -186,8 +218,7 @@ pcontainsCurrencySymbols = phoistAcyclic $
 -- | Checks if a tokenName is prefixed by a certain ByteString
 pisPrefixedWith :: ClosedTerm (PTokenName :--> PByteString :--> PBool)
 pisPrefixedWith = plam $ \tn prefix ->
-  let tnBS = pto tn
-   in pisPrefixOf # prefix # tnBS
+  pmatch (pto tn) $ \(PDataNewtype tnBS) -> pisPrefixOf # prefix # pfromData tnBS
 
 -- | Checks if the first ByteString is a prefix of the second
 pisPrefixOf :: ClosedTerm (PByteString :--> PByteString :--> PBool)
@@ -318,64 +349,64 @@ ptxSignedByPkh ::
   Term s (PAsData PPubKeyHash :--> PBuiltinList (PAsData PPubKeyHash) :--> PBool)
 ptxSignedByPkh = pelem
 
-psymbolValueOfHelper ::
-  forall
-    (keys :: KeyGuarantees)
-    (amounts :: AmountGuarantees)
-    (s :: S).
-  Term
-    s
-    ( (PInteger :--> PBool)
-        :--> PCurrencySymbol
-        :--> ( PValue keys amounts
-                :--> PInteger
-             )
-    )
-psymbolValueOfHelper =
-  phoistAcyclic $
-    plam $ \cond sym value'' -> unTermCont $ do
-      PValue value' <- pmatchC value''
-      PMap value <- pmatchC value'
-      m' <-
-        tcexpectJust
-          0
-          ( plookupAssoc
-              # pfstBuiltin
-              # psndBuiltin
-              # pdata sym
-              # value
-          )
-      PMap m <- pmatchC (pfromData m')
-      pure $
-        pfoldr
-          # plam
-            ( \x v ->
-                plet (pfromData $ psndBuiltin # x) $ \q ->
-                  pif
-                    (cond # q)
-                    (q + v)
-                    v
-            )
-          # 0
-          # m
+-- psymbolValueOfHelper ::
+--   forall
+--     (keys :: KeyGuarantees)
+--     (amounts :: AmountGuarantees)
+--     (s :: S).
+--   Term
+--     s
+--     ( (PInteger :--> PBool)
+--         :--> PCurrencySymbol
+--         :--> ( PValue keys amounts
+--                 :--> PInteger
+--              )
+--     )
+-- psymbolValueOfHelper =
+--   phoistAcyclic $
+--     plam $ \cond sym value'' -> unTermCont $ do
+--       PValue value' <- pmatchC value''
+--       PMap value <- pmatchC value'
+--       m' <-
+--         tcexpectJust
+--           0
+--           ( plookupAssoc
+--               # pfstBuiltin
+--               # psndBuiltin
+--               # pdata sym
+--               # value
+--           )
+--       PMap m <- pmatchC (pfromData m')
+--       pure $
+--         pfoldr
+--           # plam
+--             ( \x v ->
+--                 plet (pfromData $ psndBuiltin # x) $ \q ->
+--                   pif
+--                     (cond # q)
+--                     (q + v)
+--                     v
+--             )
+--           # 0
+--           # m
 
--- | Sum of total positive amounts in Value for a given policyId
-ppositiveSymbolValueOf ::
-  forall
-    (keys :: KeyGuarantees)
-    (amounts :: AmountGuarantees)
-    (s :: S).
-  Term s (PCurrencySymbol :--> (PValue keys amounts :--> PInteger))
-ppositiveSymbolValueOf = phoistAcyclic $ psymbolValueOfHelper #$ plam (0 #<)
+-- -- | Sum of total positive amounts in Value for a given policyId
+-- ppositiveSymbolValueOf ::
+--   forall
+--     (keys :: KeyGuarantees)
+--     (amounts :: AmountGuarantees)
+--     (s :: S).
+--   Term s (PCurrencySymbol :--> (PValue keys amounts :--> PInteger))
+-- ppositiveSymbolValueOf = phoistAcyclic $ psymbolValueOfHelper #$ plam (0 #<)
 
--- | Sum of total negative amounts in Value for a given policyId
-pnegativeSymbolValueOf ::
-  forall
-    (keys :: KeyGuarantees)
-    (amounts :: AmountGuarantees)
-    (s :: S).
-  Term s (PCurrencySymbol :--> (PValue keys amounts :--> PInteger))
-pnegativeSymbolValueOf = phoistAcyclic $ psymbolValueOfHelper #$ plam (#< 0)
+-- -- | Sum of total negative amounts in Value for a given policyId
+-- pnegativeSymbolValueOf ::
+--   forall
+--     (keys :: KeyGuarantees)
+--     (amounts :: AmountGuarantees)
+--     (s :: S).
+--   Term s (PCurrencySymbol :--> (PValue keys amounts :--> PInteger))
+-- pnegativeSymbolValueOf = phoistAcyclic $ psymbolValueOfHelper #$ plam (#< 0)
 
 -- | Probably more effective than `plength . pflattenValue`
 pcountOfUniqueTokens ::
@@ -398,7 +429,7 @@ pcountOfUniqueTokens = phoistAcyclic $
   Term s (PValue 'Sorted amounts) ->
   Term s (PValue 'Sorted amounts) ->
   Term s (PValue 'Sorted 'NonZero)
-a #- b = pnormalize #$ Value.punionWith # plam (-) # a # b
+a #- b = pnormalize #$ Value.punionResolvingCollisionsWith AssocMap.NonCommutative # plam (-) # a # b
 
 pfindWithRest ::
   forall (list :: PType -> PType) (a :: PType).
@@ -702,7 +733,7 @@ infix 4 #>=
 a #/= b = pnot # (a #== b)
 infix 4 #/=
 
-pisFinite :: Term s (PInterval PPOSIXTime :--> PBool)
+pisFinite :: Term s (PInterval PPosixTime :--> PBool)
 pisFinite = plam $ \i -> 
   let isFiniteFrom = pmatch (pfield @"_0" # (pfield @"from" # i)) $ \case 
         PFinite _ -> pconstant True 

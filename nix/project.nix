@@ -11,7 +11,7 @@ let
   cabalProject = pkgs.haskell-nix.cabalProject' {
     inherit modules sha256map;
     src = ../.;
-    name = "proposal-loans";
+    name = "airdrop-contracts";
     compiler-nix-name = "ghc966";
     index-state = "2024-06-17T12:18:52Z";
     inputMap = {

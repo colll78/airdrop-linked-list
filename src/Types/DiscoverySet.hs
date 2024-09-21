@@ -28,15 +28,7 @@ module Types.DiscoverySet (
 ) where
 
 import GHC.Generics (Generic)
-import Plutarch.Api.V2 (
-  PAddress,
-  PCurrencySymbol,
-  PPOSIXTime,
-  PPubKeyHash (PPubKeyHash),
-  PScriptHash (..),
-  PStakingCredential(..),
-  PTxOutRef,
- )
+import Plutarch.LedgerApi.V2 
 import Plutarch.DataRepr (
   DerivePConstantViaData (DerivePConstantViaData),
   PDataFields,
@@ -45,8 +37,10 @@ import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import PlutusLedgerApi.V2 (BuiltinByteString, PubKeyHash)
+import Plutarch.LedgerApi.V3 (PPosixTime (..))
 import PlutusTx qualified
 import Types.Classes
+import Plutarch.Builtin (PDataNewtype (PDataNewtype))
 
 data NodeValidatorAction
   = LinkedListAct
@@ -82,7 +76,7 @@ data PDiscoveryLaunchConfig (s :: S)
       ( Term
           s
           ( PDataRecord
-              '[ "discoveryDeadline" ':= PPOSIXTime
+              '[ "discoveryDeadline" ':= PPosixTime
                , "penaltyAddress" ':= PAddress
                , "globalCred" ':= PStakingCredential
                ]
@@ -99,7 +93,7 @@ data PDiscoveryConfig (s :: S)
           s
           ( PDataRecord
               '[ "initUTxO" ':= PTxOutRef
-               , "discoveryDeadline" ':= PPOSIXTime
+               , "discoveryDeadline" ':= PPosixTime
                , "penaltyAddress" ':= PAddress
                ]
           )
@@ -245,7 +239,7 @@ data PSeparatorConfig (s :: S)
           s
           ( PDataRecord
               '[ "signer" ':= PPubKeyHash
-               , "cutOff" ':= PPOSIXTime
+               , "cutOff" ':= PPosixTime
                ]
           )
       )
@@ -385,7 +379,9 @@ getNextPK = phoistAcyclic $
     let nextNodeKey = pfromData $ pfield @"next" # node
      in pmatch nextNodeKey $ \case
           PEmpty _ -> pcon PNothing
-          PKey ((pfield @"_0" #) -> n) -> pcon $ PJust $ pcon $ PPubKeyHash $ pfromData n
+          PKey key -> 
+            plet (pfromData $ pfield @"_0" # key) $ \n ->
+              pcon $ PJust $ pcon $ PPubKeyHash $ pcon $ PDataNewtype $ pdata n
 
 -- | Extracts the node key
 getCurrentPK :: ClosedTerm (PAsData PDiscoverySetNode :--> PMaybe PPubKeyHash)
@@ -394,7 +390,8 @@ getCurrentPK = phoistAcyclic $
     let nodeKey = pfromData $ pfield @"key" # node
      in pmatch nodeKey $ \case
           PEmpty _ -> pcon PNothing
-          PKey ((pfield @"_0" #) -> n) -> pcon $ PJust $ pcon $ PPubKeyHash $ pfromData n
+          PKey ((pfield @"_0" #) -> key) -> 
+            pcon $ PJust $ pcon $ PPubKeyHash $ pcon $ PDataNewtype key
 
 {- | Checks whether @SetNode@ key is less than next node key.
   Any valid sequence of nodes MUST follow this property.

@@ -3,11 +3,12 @@
 module Types.Constants where
 
 import Plutarch
-import Plutarch.Api.V1 (PTokenName (..))
+import Plutarch.LedgerApi.V1 (PTokenName (..))
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import PlutusLedgerApi.V1 (TokenName)
-import PriceDiscoveryEvent.Utils (passert, pisPrefixOf)
+import PriceDiscoveryEvent.Utils (pnonew, passert, pisPrefixOf)
+import Plutarch.Builtin (PDataNewtype(..))
 
 projectTokenHolderTN :: Term s PTokenName
 projectTokenHolderTN =
@@ -45,11 +46,11 @@ psetNodePrefix = pconstant "FSN"
 pnodeKeyTN :: ClosedTerm (PByteString :--> PTokenName)
 pnodeKeyTN = phoistAcyclic $
   plam $
-    \nodeKey -> pcon $ PTokenName $ psetNodePrefix <> nodeKey
+    \nodeKey -> pcon $ PTokenName $ pcon $ PDataNewtype $ pdata $ psetNodePrefix <> nodeKey
 
 pparseNodeKey :: ClosedTerm (PTokenName :--> PMaybe PByteString)
 pparseNodeKey = phoistAcyclic $
-  plam $ \(pto -> tn) -> P.do
+  plam $ \(pnonew -> tn) -> P.do
     let prefixLength = 3
         tnLength = plengthBS # tn
         key = psliceBS # prefixLength # (tnLength - prefixLength) # tn

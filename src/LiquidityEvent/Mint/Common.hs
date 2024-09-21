@@ -8,25 +8,11 @@ module LiquidityEvent.Mint.Common (
   pClaim
 ) where
 
-import Plutarch.Api.V1.Value (plovelaceValueOf, pnormalize, pvalueOf)
-import Plutarch.Api.V2 (
-  AmountGuarantees (..),
-  KeyGuarantees (..),
-  PCurrencySymbol,
-  PInterval,
-  POutputDatum (..),
-  PPOSIXTime,
-  PPubKeyHash,
-  PScriptContext,
-  PScriptHash (..),
-  PScriptPurpose (PMinting),
-  PTxInInfo,
-  PTxOut,
-  PValue,
- )
-import Plutarch.Extra.Interval (pafter, pbefore)
-import Plutarch.Extra.ScriptContext (pfromPDatum, ptryFromInlineDatum)
-import "liqwid-plutarch-extra" Plutarch.Extra.TermCont (pguardC)
+import Plutarch.LedgerApi.Value (plovelaceValueOf, pnormalize, pvalueOf)
+import Plutarch.LedgerApi.V2 
+import Plutarch.LedgerApi.AssocMap qualified as AssocMap
+import Plutarch.LedgerApi.Interval (pafter, pbefore)
+import Plutarch.TermCont (pguardC)
 import Plutarch.Internal (Config (..))
 import Plutarch.List (pconvertLists)
 import Plutarch.Monadic qualified as P
@@ -34,11 +20,6 @@ import Plutarch.Positive (PPositive)
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
 import PlutusLedgerApi.V2 (CurrencySymbol)
-import PriceDiscoveryEvent.Mint.Helpers (
-  correctNodeTokenMinted,
-  correctNodeTokensMinted,
-  coversKey,
- )
 import PriceDiscoveryEvent.Utils (
   pand'List,
   passert,
@@ -57,12 +38,28 @@ import PriceDiscoveryEvent.Utils (
   pvalueOfOne,
   (#>),
   (#>=),
+  pfromPDatum, 
+  ptryFromInlineDatum,
  )
 import Types.Constants (minAda, nodeDepositAda, minAdaToCommit, pcorrNodeTN, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
-import Types.DiscoverySet (
-  PNodeKey (..),
- )
 import Types.LiquiditySet
+
+{- | Ensures that the minted amount of the FinSet CS is exactly the specified
+     tokenName and amount
+-}
+correctNodeTokenMinted ::
+  ClosedTerm
+    ( PCurrencySymbol
+        :--> PTokenName
+        :--> PInteger
+        :--> PValue 'Sorted 'NonZero
+        :--> PBool
+    )
+correctNodeTokenMinted = phoistAcyclic $
+  plam $ \nodeCS tokenName amount mint -> P.do
+    PJust nodeMint <- pmatch $ AssocMap.plookup # nodeCS # pto mint
+    let tokenMap = AssocMap.psingleton # tokenName # amount
+    tokenMap #== nodeMint
 
 pdivideCeil :: Term s (PInteger :--> PInteger :--> PInteger)
 pdivideCeil = phoistAcyclic $ plam $ \a b -> (pdiv # a # b) + pif ((pmod # a # b) #> 0) 1 0
@@ -131,7 +128,7 @@ makeCommon ::
     , Term s (PBuiltinList PTxInInfo)
     , Term s (PBuiltinList PTxOut)
     , Term s (PBuiltinList (PAsData PPubKeyHash))
-    , Term s (PInterval PPOSIXTime)
+    , Term s (PInterval PPosixTime)
     )
 makeCommon cfg ctx' = do
   ------------------------------
@@ -270,7 +267,7 @@ pRemove ::
   forall (s :: S).
   Config ->
   PPriceDiscoveryCommon s ->
-  Term s (PInterval PPOSIXTime) ->
+  Term s (PInterval PPosixTime) ->
   Term s PLiquidityConfig ->
   Term s (PBuiltinList PTxOut) ->
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->

@@ -6,7 +6,7 @@ let
   plutarch = inputs.plutarch.packages.plutarch;
 in
 {
-  name = "proposal-loan";
+  name = "airdrop-contracts";
   packages = [
     pkgs.ghcid
   ];

@@ -1,8 +1,8 @@
 module MerkleTree.Merkling where 
-    
+
 import Plutarch.Prelude
 import Plutarch.ByteString (PByteString)
-import Plutarch.Builtin (pblake2b_256)
+import Plutarch.Crypto (pblake2b_256)
 import Plutarch.Integer (PInteger)
 import Plutarch.Lift (pconstant)
 import Data.ByteString qualified as BS
