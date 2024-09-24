@@ -20,6 +20,7 @@ import PlutusTx qualified
 import Types.Classes 
 import Plutarch.Builtin (PDataNewtype (PDataNewtype))
 import Plutarch.Bool (pand')
+import MerkleTree.MerklePatriciaForestry (PMerklePatriciaForestry (..))
 
 data NodeKey = Key BuiltinByteString | Empty
   deriving stock (Show, Eq, Ord, Generic)
@@ -136,7 +137,7 @@ data PLiquidityConfig (s :: S)
           ( PDataRecord
               '[ "initUTxO" ':= PTxOutRef
                , "discoveryDeadline" ':= PPosixTime
-               , "penaltyAddress" ':= PAddress
+               , "claimRoot" ':= PMerklePatriciaForestry
                ]
           )
       )
