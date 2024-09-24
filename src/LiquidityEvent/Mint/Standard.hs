@@ -6,7 +6,7 @@ module LiquidityEvent.Mint.Standard (
   mkLiquidityNodeMPW,
 ) where
 
-import Plutarch.LedgerApi.V2 
+import Plutarch.LedgerApi.V3
 import Plutarch.LedgerApi.Interval (pafter, pbefore)
 
 --  pRemoveAndDeinit,
@@ -23,11 +23,9 @@ import LiquidityEvent.Mint.Common (
   pRemove,
   pClaim
  )
-import PriceDiscoveryEvent.Mint.Helpers (
-  hasUtxoWithRef,
- )
+
 import Plutarch.Prelude
-import PriceDiscoveryEvent.Utils (pand'List, passert, pcond, pisFinite)
+import PriceDiscoveryEvent.Utils (pand'List, passert, pcond, pisFinite, phasUTxO)
 import Types.LiquiditySet (PLiquidityConfig (..), PLiquidityNodeAction (..))
 
 --------------------------------
@@ -52,7 +50,7 @@ mkLiquidityNodeMP cfg = plam $ \discConfig redm ctx -> P.do
   pmatch redm $ \case
     PLInit _ -> P.do
       passert "Init must consume TxOutRef" $
-        hasUtxoWithRef # configF.initUTxO # inputs
+        phasUTxO # configF.initUTxO # inputs
       pInit cfg common
     PLDeinit _ ->
       -- TODO deinit must check that reward fold has been completed
@@ -67,22 +65,23 @@ mkLiquidityNodeMP cfg = plam $ \discConfig redm ctx -> P.do
               ]
       pif insertChecks (pInsert cfg common # act.keyToInsert # act.coveringNode) perror
     PLRemove action -> P.do
-      configF <- pletFields @'["discoveryDeadline"] discConfig
-      act <- pletFields @'["keyToRemove", "coveringNode"] action
-      discDeadline <- plet (pfromData configF.discoveryDeadline)
-      passert "vrange not finite" (pisFinite # vrange)
-      pcond 
-        [ ((pbefore # (discDeadline + 86_400_000) # vrange), (pClaim cfg common outs sigs # act.keyToRemove))
-        , ((pafter # discDeadline # vrange), (pRemove cfg common vrange discConfig outs sigs # act.keyToRemove # act.coveringNode))
-        ]
-        perror 
+      perror 
+      -- configF <- pletFields @'["discoveryDeadline"] discConfig
+      -- act <- pletFields @'["keyToRemove", "coveringNode"] action
+      -- discDeadline <- plet (pfromData configF.discoveryDeadline)
+      -- passert "vrange not finite" (pisFinite # vrange)
+      -- pcond 
+      --   [ ((pbefore # (discDeadline + 86_400_000) # vrange), (pClaim cfg common outs sigs # act.keyToRemove))
+      --   , ((pafter # discDeadline # vrange), (pRemove cfg common vrange discConfig outs sigs # act.keyToRemove # act.coveringNode))
+      --   ]
+      --   perror 
 
 mkLiquidityNodeMPW ::
   Config ->
   ClosedTerm
     ( PLiquidityConfig
-        :--> PMintingPolicy
+        :--> PScriptContext :--> PUnit 
     )
-mkLiquidityNodeMPW cfg = phoistAcyclic $ plam $ \discConfig redm ctx ->
-  let red = punsafeCoerce @_ @_ @PLiquidityNodeAction redm
-   in popaque $ mkLiquidityNodeMP cfg # discConfig # red # ctx
+mkLiquidityNodeMPW cfg = phoistAcyclic $ plam $ \discConfig ctx ->
+  let red = punsafeCoerce @_ @_ @PLiquidityNodeAction (pto (pfield @"redeemer" # ctx))
+   in mkLiquidityNodeMP cfg # discConfig # red # ctx

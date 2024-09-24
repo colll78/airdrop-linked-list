@@ -6,7 +6,7 @@
 
 module Types.LiquiditySet where
 
-import Plutarch.LedgerApi.V2 
+import Plutarch.LedgerApi.V3
 import Plutarch.DataRepr (
   DerivePConstantViaData (DerivePConstantViaData),
   PDataFields,
@@ -19,6 +19,7 @@ import PlutusLedgerApi.V2 (BuiltinByteString, PubKeyHash, TokenName, CurrencySym
 import PlutusTx qualified
 import Types.Classes 
 import Plutarch.Builtin (PDataNewtype (PDataNewtype))
+import Plutarch.Bool (pand')
 
 data NodeKey = Key BuiltinByteString | Empty
   deriving stock (Show, Eq, Ord, Generic)
@@ -208,7 +209,7 @@ data PLiquiditySetNode (s :: S)
           ( PDataRecord
               '[ "key" ':= PNodeKey
                , "next" ':= PNodeKey
-               , "commitment" ':= PVestingDatum 
+               , "extraData" ':= PData  
                ]
           )
       )
@@ -279,15 +280,15 @@ instance DerivePlutusType PSeparatorConfig where type DPTStrat _ = PlutusTypeDat
 --           #$ pdcons @"commitment" # pconstantData VestingDatum{}
 --           #$ pdnil
 
-mkNodeWithCommit :: Term s (PNodeKey :--> PNodeKey :--> PVestingDatum :--> PLiquiditySetNode)
-mkNodeWithCommit = phoistAcyclic $
-  plam $ \key next commitment ->
-    pcon $
-      PLiquiditySetNode $
-        pdcons @"key" # pdata key
-          #$ pdcons @"next" # pdata next
-          #$ pdcons @"commitment" # pdata commitment
-          #$ pdnil
+-- mkNodeWithCommit :: Term s (PNodeKey :--> PNodeKey :--> PVestingDatum :--> PLiquiditySetNode)
+-- mkNodeWithCommit = phoistAcyclic $
+--   plam $ \key next commitment ->
+--     pcon $
+--       PLiquiditySetNode $
+--         pdcons @"key" # pdata key
+--           #$ pdcons @"next" # pdata next
+--           #$ pdcons @"commitment" # pdata commitment
+--           #$ pdnil
 
 data LiquidityNodeAction
   = Init
@@ -395,6 +396,18 @@ isNothing = phoistAcyclic $
 --     let nodeKey = pfromData $ pfield @"key" # node
 --         nextPK = pcon $ PKey $ pdcons @"_0" # pdata next #$ pdnil
 --      in mkNode # nodeKey # nextPK
+
+pisInsertedOnNode :: ClosedTerm (PNodeKey :--> PNodeKey :--> PAsData PLiquiditySetNode :--> PBool)
+pisInsertedOnNode = phoistAcyclic $
+  plam $ \insertedKey coveringKey outputNode -> P.do
+    outputNodeDatum <- pletFields @'["key", "next"] outputNode
+    pand' # (outputNodeDatum.key #== coveringKey) # (outputNodeDatum.next #== insertedKey)
+
+pisInsertedNode :: ClosedTerm (PNodeKey :--> PNodeKey :--> PAsData PLiquiditySetNode :--> PBool)
+pisInsertedNode = phoistAcyclic $ 
+  plam $ \insertedKey coveringNext outputNode ->
+    pletFields @'["key", "next"] outputNode $ \outputNodeDatumF ->
+      pand' # (outputNodeDatumF.key #== insertedKey) # (outputNodeDatumF.next #== coveringNext)
 
 {- | @
     key `asSuccessorOf` node

@@ -24,9 +24,7 @@ import Plutarch (
  )
 import Plutarch.Evaluate (
   evalScript,
- )
-import "liqwid-plutarch-extra" Plutarch.Extra.Script (
-  applyArguments,
+  applyArguments
  )
 import Plutarch.Prelude
 import Plutarch.Script (Script, serialiseScript)
@@ -34,17 +32,9 @@ import PlutusLedgerApi.V2 (
   Data,
   ExBudget,
  )
-import PriceDiscoveryEvent.Mint.Standard (mkDiscoveryNodeMPW)
-import PriceDiscoveryEvent.MultiFold (pfoldValidatorW, pmintFoldPolicyW, pmintRewardFoldPolicyW, prewardFoldValidatorW)
-import PriceDiscoveryEvent.Validator (pDiscoverySetValidator, pDiscoverGlobalLogicW)
-import PriceDiscoveryEvent.ProjectTokenHolder (pprojectTokenHolder, pmintProjectTokenHolder)
-import PriceDiscoveryEvent.MultiFoldLiquidity qualified as LiquidityFold 
-import LiquidityEvent.Mint.Standard (mkLiquidityNodeMPW)
-import LiquidityEvent.Validator (pLiquiditySetValidator, pLiquidityGlobalLogicW)
-import LiquidityEvent.ProxyTokenHolderV1 qualified as ProxyTokenHolderV1
 import AlwaysFails (pAlwaysFails, pAuthMint)
 import System.IO
-import LiquidityEvent.LiquidityTokenHolder (pmintLiquidityTokenHolder, pliquidityTokenHolder)
+
 
 encodeSerialiseCBOR :: Script -> Text
 encodeSerialiseCBOR = Text.decodeUtf8 . Base16.encode . CBOR.serialize' . serialiseScript

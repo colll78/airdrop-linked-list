@@ -9,7 +9,6 @@ module LiquidityEvent.Mint.Common (
 ) where
 
 import Plutarch.LedgerApi.Value (plovelaceValueOf, pnormalize, pvalueOf)
-import Plutarch.LedgerApi.V2 
 import Plutarch.LedgerApi.AssocMap qualified as AssocMap
 import Plutarch.LedgerApi.Interval (pafter, pbefore)
 import Plutarch.TermCont (pguardC)
@@ -40,9 +39,12 @@ import PriceDiscoveryEvent.Utils (
   (#>=),
   pfromPDatum, 
   ptryFromInlineDatum,
+  pnonew,
+  pmapFilter,
  )
 import Types.Constants (minAda, nodeDepositAda, minAdaToCommit, pcorrNodeTN, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
 import Types.LiquiditySet
+import Plutarch.LedgerApi.V3 
 
 {- | Ensures that the minted amount of the FinSet CS is exactly the specified
      tokenName and amount
@@ -133,7 +135,7 @@ makeCommon ::
 makeCommon cfg ctx' = do
   ------------------------------
   -- Preparing info needed for validation:
-  ctx <- tcont $ pletFields @'["txInfo", "purpose"] ctx'
+  ctx <- tcont $ pletFields @'["txInfo", "scriptInfo"] ctx'
   info <-
     tcont $
       pletFields
@@ -141,17 +143,19 @@ makeCommon cfg ctx' = do
         ctx.txInfo
 
   ownCS <- tcont . plet $ P.do
-    PMinting mintRecord <- pmatch $ ctx.purpose
+    PMintingScript mintRecord <- pmatch $ ctx.scriptInfo
     pfield @"_0" # mintRecord
 
   mint <- tcont . plet $ pnormalize #$ pfromData info.mint
-  asOuts <- tcont . plet $ pmap # plam (pfield @"resolved" #)
+  -- asOuts <- tcont . plet $ pmap # plam (pfield @"resolved" #)
   -- refInsAsOuts <- tcont . plet $ asOuts # pfromData info.referenceInputs
   hasNodeTk <- tcont . plet $ phasDataCS # ownCS
-  insAsOuts <- tcont . plet $ asOuts # pfromData info.inputs
-  onlyAtNodeVal <- tcont . plet $ pfilter # plam (\txo -> (hasNodeTk # (pfield @"value" # txo)))
-  fromNodeValidator <- tcont . plet $ onlyAtNodeVal # insAsOuts
-  toNodeValidator <- tcont . plet $ onlyAtNodeVal # info.outputs
+  -- insAsOuts <- tcont . plet $ pmap # plam (pfield @"resolved" #) # info.inputs
+  -- onlyAtNodeVal <- tcont . plet $ pfilter @PBuiltinList # plam (\txo -> (hasNodeTk # (pfield @"value" # txo)))
+  txInputs <- tcont . plet $ punsafeCoerce @_ @_ @(PBuiltinList PTxInInfo) info.inputs 
+  txOutputs <- tcont . plet $ punsafeCoerce @_ @_ @(PBuiltinList PTxOut) info.outputs 
+  fromNodeValidator <- tcont . plet $ pmapFilter @PBuiltinList # plam (\txo -> (hasNodeTk # (pfield @"value" # txo))) # plam (pfield @"resolved" #) # txInputs
+  toNodeValidator <- tcont . plet $ pfilter @PBuiltinList # plam (\txo -> (hasNodeTk # (pfield @"value" # txo))) # txOutputs
   ------------------------------
 
   let atNodeValidator =
@@ -186,8 +190,8 @@ makeCommon cfg ctx' = do
   vrange <- tcont . plet $ pfromData info.validRange
   pure
     ( common
-    , info.inputs
-    , info.outputs
+    , txInputs 
+    , txOutputs 
     , info.signatories
     , vrange
     )
@@ -200,6 +204,7 @@ pInit cfg common = P.do
   PPair _ otherNodes <-
     pmatch $
       pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ nodeDat) -> isEmptySet # nodeDat)) # common.nodeOutputs
+
   passert "Init output exactly one Node" $
     pnull # otherNodes
   -- Mint checks:
@@ -232,31 +237,27 @@ pInsert ::
   PPriceDiscoveryCommon s ->
   Term s (PAsData PPubKeyHash :--> PAsData PLiquiditySetNode :--> PUnit)
 pInsert cfg common = plam $ \pkToInsert node -> P.do
-  keyToInsert <- plet . pto . pfromData $ pkToInsert
-  passert "Node should cover inserting key" $
-    coversLiquidityKey # node # keyToInsert
-  -- Input Checks
-  PPair coveringNode otherNodes <-
-    pmatch $
-      pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> node #== dat)) # common.nodeInputs
-  passert "Insert must spend exactly one node" $
-    pnull # otherNodes
-  -- Output Checks:
-  PPair coveringValue _coveringDatum <- pmatch coveringNode
-  prevNodeOutDatum <- plet $ pdata $ asPredecessorOf # node # keyToInsert
-  let nodeOutDatum = pdata $ asSuccessorOf # keyToInsert # node
+  keyToInsert <- plet $ pnonew $ pfromData pkToInsert 
+  
+  -- Input Checks:
+  -- There is only one spent node (tx inputs contains only one node UTxO)
+  -- The spent node indeed covers the key we want to insert
+  PPair coveringValue coveringDatum <- pmatch $ pheadSingleton # common.nodeInputs
+  passert "Spent node should cover inserting key" $ coversLiquidityKey # coveringDatum # keyToInsert
 
-  hasDatumInOutputs <- plet $
-    plam $ \datum ->
-      pany # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> datum #== dat)) # common.nodeOutputs
+  -- Output Checks:
+  coveringDatumF <- pletFields @'["key", "next"] coveringDatum 
+
+  nodeKeyToInsert <- plet $ pcon $ PKey $ pdcons @"_0" # pdata keyToInsert #$ pdnil
+  isInsertedOnNode <- plet $ pisInsertedOnNode # nodeKeyToInsert # coveringDatumF.key 
+  isInsertedNode <- plet $ pisInsertedNode # nodeKeyToInsert # coveringDatumF.next 
 
   passert "Incorrect node outputs for Insert" $
     pany
-      # plam (\nodePair -> pmatch nodePair (\(PPair val dat) -> val #== coveringValue #&& prevNodeOutDatum #== dat))
+      # plam (\nodePair -> pmatch nodePair (\(PPair val dat) -> val #== coveringValue #&& isInsertedOnNode # dat))
       # common.nodeOutputs
-      #&& hasDatumInOutputs
-      # nodeOutDatum
-      
+      #&& pany # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isInsertedNode # dat)) # common.nodeOutputs 
+
   -- Mint checks:
   passert "Incorrect mint for Insert" $
     correctNodeTokenMinted # common.ownCS # (pnodeKeyTN # keyToInsert) # 1 # common.mint
@@ -273,67 +274,7 @@ pRemove ::
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->
   Term s (PAsData PPubKeyHash :--> PAsData PLiquiditySetNode :--> PUnit)
 pRemove cfg common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
-  keyToRemove <- plet . pto . pfromData $ pkToRemove
-  passert "Node does not cover key to remove" $
-    coversLiquidityKey # node # keyToRemove
-  -- Input Checks
-  let prevNodeInDatum = pdata $ asPredecessorOf # node # keyToRemove
-      nodeInDatum = pdata $ asSuccessorOf # keyToRemove # node
-  findNodeInDatumInRest <- plet $
-    plam $ \datum inputs ->
-      pfindWithRest
-        # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> datum #== dat))
-        # inputs
-  PPair stayNode rest <- pmatch $ findNodeInDatumInRest # prevNodeInDatum # common.nodeInputs
-  PPair removedNode extraNodes <- pmatch $ findNodeInDatumInRest # nodeInDatum # rest
-  passert "Remove must spend exactly two nodes" $
-    pnull # extraNodes
-
-  nodeToRemoveTN <- plet (pnodeKeyTN # keyToRemove)
-
-  -- Output Checks:
-
-  PPair stayValue _stayDatum <- pmatch stayNode 
-  PPair removedValue _removedDatum <- pmatch removedNode 
-  {- This check has weak constraints due to the fact that the only way
-    To provide more node outputs would be to mint more node tokens.
-    Therefore we can safely assure that this is the only node Output.
-
-    Error is more explicit simply for debugging
-  -}
-  passert "There must be exactly one output with update node" $
-    pany # plam (\nodePair -> pmatch nodePair (\(PPair val dat) -> node #== dat #&& stayValue #== val)) # common.nodeOutputs
-
-  passert "Incorrect mint for Remove" $
-    correctNodeTokenMinted # common.ownCS # nodeToRemoveTN # (-1) # common.mint
-
-  passert "signed by user." (pelem # pkToRemove # sigs)
-
-  configF <- pletFields @'["discoveryDeadline", "penaltyAddress"] discConfig
-
-  let ownInputLovelace = plovelaceValueOf # removedValue
-      discDeadline = pfromData configF.discoveryDeadline
-  ownInputFee' <- plet $ pdivideCeil # (ownInputLovelace - nodeDepositAda) # 4
-  let ownInputFee = pif (ownInputFee' #>= nodeDepositAda) ownInputFee' nodeDepositAda
-      finalCheck =
-          -- user committing before deadline 
-          ( pif
-              (pafter # (discDeadline - 86_400_000) # vrange) -- user committing before 24 hours before deadline
-              (pconstant True)
-              ( pany
-                  # plam
-                    ( \out ->
-                        pfield @"address" # out #== configF.penaltyAddress
-                          #&& ownInputFee #<= (plovelaceValueOf # (pfield @"value" # out))
-                    )
-                  # outs -- must pay 25% fee
-              )
-          )
-          
-
-  passert "Removal broke Phase Rules." finalCheck
-
-  pconstant ()
+  perror 
 
 pClaim ::
   forall (s :: S).
@@ -342,7 +283,7 @@ pClaim ::
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->
   Term s (PAsData PPubKeyHash :--> PUnit)
 pClaim cfg common outs sigs = plam $ \pkToRemove -> P.do
-  keyToRemove <- plet . pto . pfromData $ pkToRemove
+  keyToRemove <- plet $ pnonew $ pfromData pkToRemove
   
   -- Input Checks
   PPair removedValue _removedDatum <- pmatch (pheadSingleton # common.nodeInputs)

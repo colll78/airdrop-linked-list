@@ -1,262 +1,125 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
-{-# HLINT ignore "Eta reduce" #-}
-module PlutarchMain (main) where
+module Main (main) where
 
-import Data.Default (Default (def))
+import Test.Tasty.QuickCheck as QC
+import Test.Tasty
+import Test.Tasty.HUnit
 import Plutarch
-import Plutarch.LedgerApi.V1 
-import Plutarch.Builtin
-import Plutarch.Context
-import Plutarch.Lift
-import Plutarch.List
-import Plutarch.Unsafe
-import Testing.Eval (evalT, evalWithArgsT)
-import PlutusLedgerApi.V1.Scripts
-import PlutusLedgerApi.V1.Time
-import PlutusLedgerApi.V1.Value as Value
-import PlutusLedgerApi.V2 (PubKeyHash (..), always, Map, Address(..), fromList)
-import PlutusLedgerApi.V2.Contexts
-import Vulcan.Common.Types.Auction (Positive)
-import Plutarch.LedgerApi.V1.AssocMap
-import Plutarch.Positive (PPositive, ptryPositive)
-import Ledger.Exports.V1 (Credential(..))
-import qualified Plutarch.LedgerApi.V1.AssocMap as Map
-import  Plutarch.Bool
-import PlutusTx qualified 
-import PlutusTx.Prelude qualified as PlutusTx
+import Plutarch.Prelude
+import MerkleTree.Helpers
+import MerkleTree.Merkling 
+import qualified Data.ByteString as BS
+import Testing.Eval (passert)
+import PriceDiscoveryEvent.Utils (pand'List)
+import Plutarch.Monadic qualified as P
+import Data.Word (Word8)
+import Testing.MerklePatriciaForestry qualified as MPF
 
--- import Vulcan.Onchain.Collections.BulkMint (pbulkMintPolicyW)
--- import Vulcan.Onchain.Collections.SequentialMint (psequentialNFTMintW, pseqValidatorW, pseqStateMintingPolicy)
+genByteString :: Gen BS.ByteString
+genByteString = do
+  len <- choose (0, 100)  -- You can choose the length range you prefer
+  bytes <- vectorOf len (arbitrary :: Gen Word8)
+  return $ BS.pack bytes
 
--- seqStateToken :: Integer -> Value
--- seqStateToken n = Value.singleton seqStateCurrencySymbol "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab12a" n
+genFourBytearrays :: Gen [BS.ByteString]
+genFourBytearrays = vectorOf 4 arbitrary
 
--- seqNFTToken :: TokenName -> Integer -> Value
--- seqNFTToken tkname n = Value.singleton seqNFTCurrencySymbol tkname n
-
--- sequenceStateTxOutRef :: TxOutRef
--- sequenceStateTxOutRef = TxOutRef "abce0f123e" 1
-
--- bulkMintTxOutRef :: TxOutRef
--- bulkMintTxOutRef = TxOutRef "dbae0f234e" 1
-
--- testBulkMintCurrencySymbol :: CurrencySymbol
--- testBulkMintCurrencySymbol = bulkMintCurrencySymbolH (Config {tracingMode = NoTracing}) testBulkMintParameters
-
--- testBulkMintParameters :: BulkMintParametersD
--- testBulkMintParameters = (BulkMintParametersD {uniqueRef = bulkMintTxOutRef, collectionSize = 3})
-
--- testSeqValidatorParameters :: SequenceParametersD
--- testSeqValidatorParameters =
---   SequenceParametersD
---     { seqStateCS = seqStateCurrencySymbol
---     , sequenceOwner = seqOwner
---     , threshold = 5
---     }
-
--- seqStateCurrencySymbol :: CurrencySymbol
--- seqStateCurrencySymbol = seqStateTokenCurrencySymbol sequenceStateTxOutRef
-
--- seqNFTCurrencySymbol :: CurrencySymbol
--- seqNFTCurrencySymbol = sequentialNFTCurrencySymbol seqValidatorValHash
-
--- seqValidatorValHash :: ValidatorHash
--- seqValidatorValHash = ValidatorHash "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab12a"
-
--- seqOwner :: PubKeyHash
--- seqOwner = "1a5cea7b8b3e600d45088fd95b4aba9a05df8ac58ee623b7150ab23d"
-
--- seqStateDatum :: Integer -> SequenceDatum
--- seqStateDatum n = SequenceDatum {mintCount = n}
-
--- sequenceValidatorCtxBuilder :: SpendingBuilder
--- sequenceValidatorCtxBuilder =
---   mconcat
---     [ withSpendingOutRef ref2
---     , input $
---         pubKey pk
---           <> withValue minAdaVal
---           <> withRef ref1
---     , input $
---         script seqValidatorValHash
---           <> withValue (minAdaVal <> seqStateToken 1)
---           <> withInlineDatum (mkD $ seqStateDatum 0)
---           <> withRef ref2
---     , signedWith seqOwner
---     , timeRange always
---     ]
-
--- sequenceValidatorFailsCtx :: ScriptContext
--- sequenceValidatorFailsCtx =
---   let builder :: SpendingBuilder
---       builder =
---         mconcat
---           [ sequenceValidatorCtxBuilder
---           , output $
---               script seqValidatorValHash
---                 <> withValue (minAdaVal <> seqStateToken 1)
---                 <> withInlineDatum (mkD $ seqStateDatum 0)
---           , output $
---               pubKey "deadbeefdeadbeefdeadbeef"
---                 <> withValue (minAdaVal <> seqNFTToken "foo" 1)
---           , mint $ seqNFTToken "foo" 1
---           ]
---    in buildSpending [checkSpending] (mkNormalized builder)
-
--- sequenceValidatorSucceedsCtx :: ScriptContext
--- sequenceValidatorSucceedsCtx =
---   let builder :: SpendingBuilder
---       builder =
---         mconcat
---           [ sequenceValidatorCtxBuilder
---           , output $
---               script seqValidatorValHash
---                 <> withValue (minAdaVal <> seqStateToken 1)
---                 <> withInlineDatum (mkD $ seqStateDatum 1)
---           , output $
---               pubKey "deadbeefdeadbeefdeadbeef"
---                 <> withValue (minAdaVal <> seqNFTToken "foo" 1)
---           , mint $ seqNFTToken "foo" 1
---           ]
---    in buildSpending [checkSpending] (mkNormalized builder)
-
--- sequenceStateTokenCtxBuilder :: MintingBuilder
--- sequenceStateTokenCtxBuilder =
---   mconcat
---     [ withMinting seqStateCurrencySymbol
---     , input $
---         pubKey pk
---           <> withValue (minAdaVal <> minAdaVal)
---           <> withRef sequenceStateTxOutRef
---     , signedWith pk
---     , timeRange always
---     ]
-
--- sequenceStateTokenFailsCtx :: ScriptContext
--- sequenceStateTokenFailsCtx =
---   let builder :: MintingBuilder
---       builder =
---         sequenceStateTokenCtxBuilder
---           <> mconcat
---             [ output $
---                 pubKey pk
---                   <> withValue (minAdaVal <> Value.singleton seqStateCurrencySymbol "foo" 1)
---             , mint (Value.singleton seqStateCurrencySymbol "foo" 1)
---             ]
---    in buildMinting [checkMinting] $ mkNormalized builder
-
--- sequenceStateTokenSucceedCtx :: ScriptContext
--- sequenceStateTokenSucceedCtx =
---   let builder :: MintingBuilder
---       builder =
---         sequenceStateTokenCtxBuilder
---           <> mconcat
---             [ output $
---                 pubKey pk
---                   <> withValue minAdaVal
---             , output $
---                 script seqValidatorValHash
---                   <> withValue (minAdaVal <> Value.singleton seqStateCurrencySymbol "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab12a" 1)
---             , mint (Value.singleton seqStateCurrencySymbol "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab12a" 1)
---             ]
---    in buildMinting [checkMinting] $ mkNormalized builder
-
--- bulkMintCtxBuilder :: MintingBuilder
--- bulkMintCtxBuilder =
---   mconcat
---     [ withMinting testBulkMintCurrencySymbol
---     , input $
---         pubKey pk
---           <> withValue (minAdaVal <> minAdaVal <> minAdaVal)
---           <> withRef bulkMintTxOutRef
---     , signedWith pk
---     , timeRange always
---     ]
-
--- bulkMintSucceedCtx :: ScriptContext
--- bulkMintSucceedCtx =
---   let builder :: MintingBuilder
---       builder =
---         bulkMintCtxBuilder
---           <> mconcat
---             [ output $
---                 pubKey pk
---                   <> withValue (minAdaVal <> Value.singleton testBulkMintCurrencySymbol ("BlueToken" :: TokenName) 1)
---             , output $
---                 pubKey pk1
---                   <> withValue (minAdaVal <> Value.singleton testBulkMintCurrencySymbol ("BooToken" :: TokenName) 1)
---             , output $
---                 pubKey pk2
---                   <> withValue (minAdaVal <> Value.singleton testBulkMintCurrencySymbol ("GooToken" :: TokenName) 1)
---             , mint $
---                 Value.singleton testBulkMintCurrencySymbol ("BlueToken" :: TokenName) 1
---                   <> Value.singleton testBulkMintCurrencySymbol ("BooToken" :: TokenName) 1
---                   <> Value.singleton testBulkMintCurrencySymbol ("GooToken" :: TokenName) 1
---             ]
---    in buildMinting [checkMinting] $ mkNormalized builder
-
-
-
-
-scred1 :: ValidatorHash
-scred1 = "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab12a"
-
-scred2 :: ValidatorHash
-scred2 = "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab12b"
-
-scred3 :: ValidatorHash
-scred3 = "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab12c"
-
-scred4 :: ValidatorHash
-scred4 = "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab12d"
-
-scred5 :: ValidatorHash
-scred5 = "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab13a"
-
-scred6 :: ValidatorHash
-scred6 = "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab14a"
-
-scred7 :: ValidatorHash 
-scred7 = "6c7bfa6b888fb3e600d4d9505b4fbca905df8ac58ed623b7170ab15a"
-
-plotsOfHashes :: Term s (PBuiltinList PValidatorHash)
-plotsOfHashes = pconstant [scred1, scred2, scred3, scred4, scred5, scred6, scred7, scred1, scred2, scred3, scred4, scred5, scred6, scred7, scred1, scred2, scred3, scred4, scred5, scred6, scred7, scred1, scred2, scred3, scred4, scred5, scred6, scred7, scred1, scred2, scred3, scred4, scred5, scred6, scred7, scred1, scred2, scred3, scred4, scred5, scred6, scred7]
-
-canonicalOrdering = pconstant [26, 21, 6, 12, 13, 15]
-
-tail26 :: PIsListLike l a => Term s (l a :--> a)
-tail26 = plam (\xs -> ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail # xs)
+instance Arbitrary BS.ByteString where
+  arbitrary = genByteString
 
 main :: IO ()
-main = do
-  putStrLn "elemAt: naive"
-  case evalT
-    (  ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail #$ ptail # plotsOfHashes
-    ) of
-    Right (result, budget, trc) -> print (unScript result) >> print trc >> print budget
-    Left err -> print err
+main = defaultMain tests
 
-  putStrLn "\n"
-  putStrLn "elemAt: fast "
-  case evalT
-    (  pelemAtFast # 26 # plotsOfHashes
-    ) of
-    Right (result, budget, trc) -> print (unScript result) >> print trc >> print budget
-    Left err -> print err
+merkle_4_test :: Property
+merkle_4_test = forAll genFourBytearrays $ \nodes ->
+  plift $ pmerkle_4_test # (pconstant @(PBuiltinList PByteString) nodes)
+
+pmerkle_4_test :: ClosedTerm (PBuiltinList PByteString :--> PBool)
+pmerkle_4_test = plam $ \nodes -> P.do 
+  a <- plet $ phead # nodes
+  aRest <- plet (ptail # nodes)
+  b <- plet $ phead # aRest
+  bRest <- plet (ptail # aRest)
+  c <- plet $ phead # bRest
+  d <- plet $ phead # (ptail # bRest)
   
-  putStrLn "elemAt: canonical ordering naive"
-  case evalT
-    (  Plutarch.List.pmap # plam (\idx -> pelemAt' # idx # plotsOfHashes) # canonicalOrdering
-    ) of
-    Right (result, budget, trc) -> print (unScript result) >> print trc >> print budget
-    Left err -> print err
+  root <- plet $ pcombine # (pcombine # a # b) # (pcombine # c # d)
+  
+  pand'List
+    [ pmerkle_4 # 0 # a # (pcombine # c # d) # b #== root
+    , pmerkle_4 # 1 # b # (pcombine # c # d) # a #== root
+    , pmerkle_4 # 2 # c # (pcombine # a # b) # d #== root
+    , pmerkle_4 # 3 # d # (pcombine # a # b) # c #== root
+    ]
 
-  putStrLn "\n"
-  putStrLn "elemAt: canonical ordering fast "
-  case evalT
-    (  Plutarch.List.pmap # plam (\idx -> pelemAtFast # idx # plotsOfHashes) # canonicalOrdering
-    ) of
-    Right (result, budget, trc) -> print (unScript result) >> print trc >> print budget
-    Left err -> print err
+combineNullHash :: Term s PBool
+combineNullHash = 
+  pand'List 
+    [ pcombine # pnull_hash # pnull_hash #== pnull_hash_2
+    , pcombine # pnull_hash_2 # pnull_hash_2 #== pnull_hash_4
+    , pcombine # pnull_hash_4 # pnull_hash_4 #== pnull_hash_8
+    ]
 
+examplesSuffix :: Term s PBool 
+examplesSuffix = 
+  pand'List 
+    [ (psuffix # phexByteStr "abcd456789" # 0 #== phexByteStr "ffabcd456789")
+    , (psuffix # phexByteStr "abcd456789" # 1 #== phexByteStr "000bcd456789")
+    , (psuffix # phexByteStr "abcd456789" # 2 #== phexByteStr "ffcd456789")
+    , (psuffix # phexByteStr "abcd456789" # 4 #== phexByteStr "ff456789")
+    , (psuffix # phexByteStr "abcd456789" # 5 #== phexByteStr "00056789")
+    , (psuffix # phexByteStr "abcd456789" # 10 #== phexByteStr "ff")
+    ]
+
+examplesNibbles :: Term s PBool
+examplesNibbles = 
+  pand'List 
+    [ (pnibbles # phexByteStr "0123456789" # 2 # 2 #== pconstant (BS.pack []))
+    , (pnibbles # phexByteStr "0123456789" # 2 # 3 #== pconstant (BS.pack [2]))
+    , (pnibbles # phexByteStr "0123456789" # 4 # 8 #== pconstant (BS.pack [4, 5, 6, 7]))
+    , (pnibbles # phexByteStr "0123456789" # 3 # 6 #== pconstant (BS.pack [3, 4, 5]))
+    , (pnibbles # phexByteStr "0123456789" # 1 # 7 #== pconstant (BS.pack [1, 2, 3, 4, 5, 6]))
+    ]
+
+examplesNibble :: Term s PBool
+examplesNibble = 
+  pand'List 
+    [ pnibble # phexByteStr "ab" # 0 #== 10
+    , pnibble # phexByteStr "ab" # 1 #== 11
+    ]
+
+tests :: TestTree
+tests = testGroup "Helper Tests"
+  [ testGroup "combine tests"
+      [ testCase "combine null hashes" $
+          passert combineNullHash
+      ]
+  , testGroup "suffix tests"
+      [ testCase "suffix examples" $ do
+          passert examplesSuffix
+      ]
+  , testGroup "nibbles tests"
+      [ testCase "nibbles examples" $ do
+          passert examplesNibbles
+      ]
+  , testGroup "nibble tests"
+      [ testCase "nibble examples" $
+          passert examplesNibble
+      ]
+  , testGroup "Merkle tests"
+      [ QC.testProperty "merkle_4 property" merkle_4_test
+      ]
+  , MPF.tests
+  ]
+
+-- | Asserts the term evaluates successfully without failing
+-- psucceeds :: ClosedTerm a -> Assertion
+-- psucceeds p =
+--   case evalScript $ comp p of
+--     (Left _, _, _) -> assertFailure "Term failed to evaluate"
+--     (Right _, _, _) -> pure ()

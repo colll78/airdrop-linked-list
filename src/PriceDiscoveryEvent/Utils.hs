@@ -4,10 +4,11 @@
 module PriceDiscoveryEvent.Utils where
 
 import Data.Text qualified as T
-import Plutarch.LedgerApi.V1 (PPosixTime(..), PScriptHash, AmountGuarantees (Positive), KeyGuarantees (Sorted), PCredential (PPubKeyCredential, PScriptCredential))
 import Plutarch.LedgerApi.Value (padaSymbol, pvalueOf, pnormalize)
 import Plutarch.LedgerApi.AssocMap qualified as AssocMap
-import Plutarch.LedgerApi.V2 
+--import Plutarch.LedgerApi.V2 
+import Plutarch.LedgerApi.V3 
+
 import Plutarch.Bool (pand')
 import Plutarch.TermCont 
 import Plutarch.Monadic qualified as P
@@ -39,14 +40,13 @@ ptryFromInlineDatum = phoistAcyclic $
   plam $
     flip pmatch $ \case
       POutputDatum ((pfield @"outputDatum" #) -> datum) -> datum
-      _ -> ptraceError "not an inline datum"
+      _ -> ptraceInfoError "not an inline datum"
 
 pfromPDatum ::
   forall (a :: S -> Type) (s :: S).
   PTryFrom PData a =>
   Term s (PDatum :--> a)
 pfromPDatum = phoistAcyclic $ plam $ flip ptryFrom fst . pto
-
 
 pnonew :: forall {a :: PType} {b :: PType} {s :: S}.
                 ((PInner a :: PType) ~ (PDataNewtype b :: PType), PIsData b) =>
@@ -77,7 +77,7 @@ passert ::
   Term s PBool ->
   Term s a ->
   Term s a
-passert longErrorMsg b inp = pif b inp $ ptraceError (pconstant longErrorMsg)
+passert longErrorMsg b inp = pif b inp $ ptraceInfoError (pconstant longErrorMsg)
 
 -- | If the input is True then returns PJust otherwise PNothing
 pcheck :: forall (s :: S) (a :: PType). Term s PBool -> Term s a -> Term s (PMaybe a)
@@ -177,6 +177,22 @@ pfindCurrencySymbolsByTokenName = phoistAcyclic $
       let mapVal = pto (pto value)
           hasTn = pfilter # plam (\csPair -> pany # plam (\tk -> tn #== (pfromData (pfstBuiltin # tk))) # (pto $ pfromData (psndBuiltin # csPair))) # mapVal
        in pmap # pfstBuiltin # hasTn
+
+pmapFilter :: 
+  (PIsListLike list a, PElemConstraint list a, PElemConstraint list b) => Term s ((b :--> PBool) :--> (a :--> b) :-->  list a :--> list b)
+pmapFilter =
+  phoistAcyclic $
+    plam $ \predicate f ->
+      precList
+        ( \self x' xs -> plet (f # x') $ \x ->
+            pif
+              (predicate # x)
+              (pcons # x # (self # xs))
+              (self # xs)
+        )
+        (const pnil)
+
+
 
 -- | Checks if a Currency Symbol is held within a Value
 phasDataCS ::
@@ -327,7 +343,7 @@ ptryOwnOutput = phoistAcyclic $
     )
       # outs
 
-ptryOwnInput :: (PIsListLike list PTxInInfo) => Term s (list PTxInInfo :--> PTxOutRef :--> PTxOut)
+ptryOwnInput :: Term s (PBuiltinList (PAsData PTxInInfo) :--> PTxOutRef :--> PTxOut)
 ptryOwnInput = phoistAcyclic $
   plam $ \inputs ownRef ->
     precList (\self x xs -> pletFields @'["outRef", "resolved"] x $ \txInFields -> pif (ownRef #== txInFields.outRef) txInFields.resolved (self # xs)) (const perror) # inputs
@@ -341,8 +357,8 @@ pheadSingleton :: (PListLike list, PElemConstraint list a) => Term s (list a :--
 pheadSingleton = phoistAcyclic $
   plam $ \xs ->
     pelimList
-      (pelimList (\_ _ -> ptraceError "List contains more than one element."))
-      (ptraceError "List is empty.")
+      (pelimList (\_ _ -> ptraceInfoError "List contains more than one element."))
+      (ptraceInfoError "List is empty.")
       xs
 
 ptxSignedByPkh ::
@@ -450,7 +466,7 @@ pfindWithRest = phoistAcyclic $
             PFalse -> P.do
               acc <- plam
               self # xs #$ pcons # x # acc
-        mnil = const (ptraceError "Find")
+        mnil = const (ptraceInfoError "Find")
      in precList mcons mnil # ys # pnil
 
 pcountCS ::
@@ -639,41 +655,18 @@ pfirstTokenNameWithCS = phoistAcyclic $
         (const perror)
         # pto val'
 
--- | Finds amount of the first asset in a value that doesn't have ownPolicyId as its currency symbol.
-ptryFindAmt ::
-  forall
-    (keys :: KeyGuarantees)
-    (amounts :: AmountGuarantees)
-    (s :: S).
-  Term s (PCurrencySymbol :--> PValue keys amounts :--> PInteger)
-ptryFindAmt = phoistAcyclic $
-  plam $ \ownPolicyId val ->
-    pmatch val $ \(PValue val') ->
-      pmatch val' $ \(PMap csPairs) ->
-        precList
-          ( \self x xs ->
-              pif
-                (pnot # (pfromData (pfstBuiltin # x) #== ownPolicyId))
-                ( pmatch (pfromData (psndBuiltin # x)) $ \(PMap tokens) ->
-                    pfoldr
-                      # plam
-                        ( \x acc ->
-                            plet (pfromData $ psndBuiltin # x) $ \q ->
-                              pif
-                                (0 #< q)
-                                (q + acc)
-                                acc
-                        )
-                      # 0
-                      # tokens
-                )
-                (self # xs)
-          )
-          (const $ ptraceError "ptryFindAmt")
-          # csPairs
-
-phasInput :: Term s (PBuiltinList PTxInInfo :--> PTxOutRef :--> PBool)
-phasInput = phoistAcyclic $ plam $ \refs oref -> pany # plam (\oref' -> oref #== pfield @"outRef" # oref') # refs
+{- | @phasUTxO # oref # inputs@
+  ensures that in @inputs@ there is an input having @TxOutRef@ @oref@ .
+-}
+phasUTxO ::
+  ClosedTerm
+    ( PTxOutRef
+        :--> PBuiltinList PTxInInfo
+        :--> PBool
+    )
+phasUTxO = phoistAcyclic $
+  plam $ \oref inInputs ->
+    pany @PBuiltinList # plam (\input -> oref #== (pfield @"outRef" # input)) # inInputs
 
 pvalueContains ::
   ClosedTerm

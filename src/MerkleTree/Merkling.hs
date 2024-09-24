@@ -1,16 +1,16 @@
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
+
 module MerkleTree.Merkling where 
 
 import Plutarch.Prelude
-import Plutarch.ByteString (PByteString)
-import Plutarch.Crypto (pblake2b_256)
-import Plutarch.Integer (PInteger)
-import Plutarch.Lift (pconstant)
 import Data.ByteString qualified as BS
+import MerkleTree.Helpers
+import PriceDiscoveryEvent.Utils ((#>=))
 
 -- Constants
 
 pnull_hash :: Term s PByteString
-pnull_hash = pconstant $ BS.replicate 32 0
+pnull_hash = pconstant $ BS.pack $ replicate 32 0
 
 pnull_hash_2 :: Term s PByteString
 pnull_hash_2 = pcombine # pnull_hash # pnull_hash

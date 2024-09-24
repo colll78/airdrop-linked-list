@@ -262,8 +262,8 @@ mkNode = phoistAcyclic $
 data PDiscoveryNodeAction (s :: S)
   = PInit (Term s (PDataRecord '[]))
   | PDeinit (Term s (PDataRecord '[]))
-  | PInsert (Term s (PDataRecord '["keyToInsert" ':= PPubKeyHash, "coveringNode" ':= PDiscoverySetNode]))
-  | PRemove (Term s (PDataRecord '["keyToRemove" ':= PPubKeyHash, "coveringNode" ':= PDiscoverySetNode]))
+  | PInsert (Term s (PDataRecord '["keyToInsert" ':= PPubKeyHash]))
+  | PRemove (Term s (PDataRecord '["keyToRemove" ':= PPubKeyHash]))
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PEq)
 
