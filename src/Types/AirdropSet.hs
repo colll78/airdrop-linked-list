@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Types.LiquiditySet where
+module Types.AirdropSet where
 
 import Plutarch.LedgerApi.V3
 import Plutarch.DataRepr (
@@ -22,7 +22,7 @@ import Plutarch.Unsafe (punsafeCoerce)
 import Plutarch.Builtin (PDataNewtype (PDataNewtype), pforgetData)
 import Plutarch.Bool (pand')
 import MerkleTree.MerklePatriciaForestry (PMerklePatriciaForestry (..), PProof(..))
-import PriceDiscoveryEvent.Utils (pcond, pand'List)
+import Airdrop.Utils (pcond, pand'List)
 import Plutarch.Internal.PlutusType (pcon', pmatch')
 
 data NodeKey = Key BuiltinByteString | Empty

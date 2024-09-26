@@ -15,7 +15,7 @@ import MerkleTree.Helpers
 import MerkleTree.Merkling 
 import qualified Data.ByteString as BS
 import Testing.Eval (passert)
-import PriceDiscoveryEvent.Utils (pand'List)
+import Airdrop.Utils (pand'List)
 import Plutarch.Monadic qualified as P
 import Data.Word (Word8)
 import Testing.MerklePatriciaForestry qualified as MPF

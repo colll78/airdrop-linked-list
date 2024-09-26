@@ -8,7 +8,7 @@ module Testing.Crypto where
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck as QC
-import PriceDiscoveryEvent.Utils (pand'List, pintToByteString)
+import Airdrop.Utils (pand'List, pintToByteString)
 import Testing.Eval (psucceeds, passert, toHexString)
 import Plutarch.Crypto 
 import Airdrop.Crypto (pethereumPubKeyToPubKeyHash, pcompressPublicKey)

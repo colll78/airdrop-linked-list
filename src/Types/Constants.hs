@@ -7,7 +7,7 @@ import Plutarch.LedgerApi.V1 (PTokenName (..), PCurrencySymbol(..), PPubKeyHash(
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import PlutusLedgerApi.V1 (TokenName, CurrencySymbol)
-import PriceDiscoveryEvent.Utils (pnonew, passert, pisPrefixOf)
+import Airdrop.Utils (pnonew, passert, pisPrefixOf)
 import Plutarch.Builtin (PDataNewtype(..))
 import MerkleTree.MerklePatriciaForestry
 import Plutarch.ByteString

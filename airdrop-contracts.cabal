@@ -168,16 +168,16 @@ library
   import:             lang
   exposed-modules:
     Airdrop.Crypto
-    LiquidityEvent.Mint.Common
-    LiquidityEvent.Mint.Standard
-    LiquidityEvent.Validator
+    Airdrop.Utils
+    AirdropEvent.Mint.Common
+    AirdropEvent.Mint.Standard
+    AirdropEvent.Validator
     MerkleTree.Helpers
     MerkleTree.MerklePatriciaForestry
     MerkleTree.Merkling
-    PriceDiscoveryEvent.Utils
+    Types.AirdropSet
     Types.Classes
     Types.Constants
-    Types.LiquiditySet
 
   -- Compile
 
@@ -245,10 +245,10 @@ test-suite helpers-tests
   hs-source-dirs:   src src/Testing
   other-modules:
     Airdrop.Crypto
+    Airdrop.Utils
     MerkleTree.Helpers
     MerkleTree.MerklePatriciaForestry
     MerkleTree.Merkling
-    PriceDiscoveryEvent.Utils
     Testing.Crypto
     Testing.Eval
     Testing.MerklePatriciaForestry

@@ -47,7 +47,7 @@ const trie = await Trie.fromList(data);
 1. Parameterize the scripts and deploy them as reference scripts.
 - Use a Cardano CLI or a library like `lucid-evolution` to submit the transactions that deploy these scripts.
 
-2. Initialize the on-chain linked list by consuming the `initUTxO` ref while invoking `mkLiquidityNodeMP` with the `PLInit` redeemer.
+2. Initialize the on-chain linked list by consuming the `initUTxO` ref while invoking `mkAirdropNodeMP` with the `PLInit` redeemer.
 
 ```javascript
 export const initAirdropNode = async (

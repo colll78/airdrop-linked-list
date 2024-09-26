@@ -5,7 +5,7 @@ module MerkleTree.Helpers where
 import Plutarch.Crypto (pblake2b_256)
 import Plutarch.Prelude
 import Data.ByteString qualified as BS 
-import PriceDiscoveryEvent.Utils ((#>=))
+import Airdrop.Utils ((#>=))
 
 -- Combine two ByteArrays using blake2b_256 hash
 pcombine :: Term s (PByteString :--> PByteString :--> PByteString)

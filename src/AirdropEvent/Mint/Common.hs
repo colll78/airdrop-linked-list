@@ -1,4 +1,4 @@
-module LiquidityEvent.Mint.Common (
+module AirdropEvent.Mint.Common (
   PPriceDiscoveryCommon (..),
   makeCommon,
   pInit,
@@ -18,7 +18,7 @@ import Plutarch.Positive (PPositive)
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
 import PlutusLedgerApi.V2 (CurrencySymbol)
-import PriceDiscoveryEvent.Utils (
+import Airdrop.Utils (
   pand'List,
   passert,
   paysToAddress,
@@ -42,7 +42,7 @@ import PriceDiscoveryEvent.Utils (
   pmapFilter,
  )
 import Types.Constants (minAda, nodeDepositAda, minAdaToCommit, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
-import Types.LiquiditySet
+import Types.AirdropSet
 import Plutarch.LedgerApi.V3 
 import Plutarch.Builtin (PDataNewtype(..), pforgetData)
 import Airdrop.Crypto
@@ -63,9 +63,6 @@ correctNodeTokenMinted = phoistAcyclic $
     PJust nodeMint <- pmatch $ AssocMap.plookup # nodeCS # pto mint
     let tokenMap = AssocMap.psingleton # tokenName # amount
     tokenMap #== nodeMint
-
-pdivideCeil :: Term s (PInteger :--> PInteger :--> PInteger)
-pdivideCeil = phoistAcyclic $ plam $ \a b -> (pdiv # a # b) + pif ((pmod # a # b) #> 0) 1 0
 
 nodeInputUtxoDatum ::
   ClosedTerm

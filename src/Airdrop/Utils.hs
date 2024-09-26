@@ -1,7 +1,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
 
-module PriceDiscoveryEvent.Utils where
+module Airdrop.Utils where
 
 import Data.Text qualified as T
 import Plutarch.LedgerApi.Value (padaSymbol, pvalueOf, pnormalize)
@@ -777,12 +777,12 @@ pshowDigit = phoistAcyclic $
       ]
       perror 
 
-pvalidityRangeStart :: Term s (PPosixTimeRange :--> (PAsData PPosixTime))
+pvalidityRangeStart :: Term s (PPosixTimeRange :--> PAsData PInteger)
 pvalidityRangeStart = phoistAcyclic $ plam $ \timeRange -> P.do 
   PInterval ((pfield @"from" #) -> from) <- pmatch timeRange
   PLowerBound lb <- pmatch from
   PFinite ((pfield @"_0" #) -> posixTime) <- pmatch (pfield @"_0" # lb)
-  posixTime
+  pmatch posixTime $ \(PPosixTime pt) -> pmatch pt $ \(PDataNewtype t) -> t 
 
 pdivCeil :: (PIntegral a, PNum a) => Term s (a :--> a :--> a)
 pdivCeil = phoistAcyclic $

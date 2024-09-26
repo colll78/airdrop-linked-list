@@ -5,7 +5,7 @@ module MerkleTree.Merkling where
 import Plutarch.Prelude
 import Data.ByteString qualified as BS
 import MerkleTree.Helpers
-import PriceDiscoveryEvent.Utils ((#>=))
+import Airdrop.Utils ((#>=))
 
 -- Constants
 

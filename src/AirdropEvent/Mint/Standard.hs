@@ -1,9 +1,9 @@
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
-module LiquidityEvent.Mint.Standard (
-  mkLiquidityNodeMP,
-  mkLiquidityNodeMPW,
+module AirdropEvent.Mint.Standard (
+  mkAirdropNodeMP,
+  mkAirdropNodeMPW,
 ) where
 
 import Plutarch.LedgerApi.V3
@@ -14,7 +14,7 @@ import Plutarch.LedgerApi.Interval (pafter, pbefore)
 import Plutarch.Internal (Config (..))
 import Plutarch.Monadic qualified as P
 import Plutarch.Unsafe (punsafeCoerce)
-import LiquidityEvent.Mint.Common (
+import AirdropEvent.Mint.Common (
   PPriceDiscoveryCommon (mint, ownCS),
   makeCommon,
   pDeinit,
@@ -24,8 +24,8 @@ import LiquidityEvent.Mint.Common (
  )
 
 import Plutarch.Prelude
-import PriceDiscoveryEvent.Utils (pand'List, passert, pcond, pisFinite, phasUTxO, pintToByteString)
-import Types.LiquiditySet (PAirdropConfig (..), PAirdropNodeAction (..), PSignatureType(..), PVestingDatum(..))
+import Airdrop.Utils (pand'List, passert, pcond, pisFinite, phasUTxO, pintToByteString)
+import Types.AirdropSet (PAirdropConfig (..), PAirdropNodeAction (..), PSignatureType(..), PVestingDatum(..))
 import Types.Constants (claimRoot, airdropOperator)
 import Airdrop.Crypto (pethereumPubKeyToPubKeyHash, pcompressPublicKey)
 import Plutarch.Builtin (pserialiseData, pforgetData, PDataNewtype(..))
@@ -36,7 +36,7 @@ import Plutarch.Crypto (pverifyEcdsaSecp256k1Signature, pblake2b_256)
 -- FinSet Node Minting Policy:
 --------------------------------
 
-mkLiquidityNodeMP ::
+mkAirdropNodeMP ::
   Config ->
   ClosedTerm
     ( PAirdropConfig
@@ -44,7 +44,7 @@ mkLiquidityNodeMP ::
         :--> PScriptContext
         :--> PUnit
     )
-mkLiquidityNodeMP cfg = plam $ \claimConfig redm ctx -> P.do
+mkAirdropNodeMP cfg = plam $ \claimConfig redm ctx -> P.do
 
   (common, inputs, sigs, vrange) <-
     runTermCont $
@@ -99,12 +99,12 @@ mkLiquidityNodeMP cfg = plam $ \claimConfig redm ctx -> P.do
         ]
         perror 
 
-mkLiquidityNodeMPW ::
+mkAirdropNodeMPW ::
   Config ->
   ClosedTerm
     ( PAirdropConfig
         :--> PScriptContext :--> PUnit 
     )
-mkLiquidityNodeMPW cfg = phoistAcyclic $ plam $ \claimConfig ctx ->
+mkAirdropNodeMPW cfg = phoistAcyclic $ plam $ \claimConfig ctx ->
   let red = punsafeCoerce @_ @_ @PAirdropNodeAction (pto (pfield @"redeemer" # ctx))
-   in mkLiquidityNodeMP cfg # claimConfig # red # ctx
+   in mkAirdropNodeMP cfg # claimConfig # red # ctx

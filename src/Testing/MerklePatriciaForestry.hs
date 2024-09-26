@@ -13,7 +13,7 @@ import qualified Data.ByteString as BS
 import Plutarch.Prelude
 import MerkleTree.MerklePatriciaForestry
 import MerkleTree.Helpers (pcombine)
-import PriceDiscoveryEvent.Utils (pand'List, pintToByteString)
+import Airdrop.Utils (pand'List, pintToByteString)
 import Testing.Eval (psucceeds, passert, toBuiltinHexString)
 import PlutusLedgerApi.V2 (BuiltinByteString, Address(..), Credential(..))
 import PlutusTx.Prelude qualified as P

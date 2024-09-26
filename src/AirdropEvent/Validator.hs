@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module LiquidityEvent.Validator (
+module AirdropEvent.Validator (
   pAirdropSetValidator,
   pLiquidityGlobalLogicW
 ) where
@@ -14,7 +14,7 @@ import Plutarch.LedgerApi.V1 (
   PCredential (..),
  )
 import Plutarch.LedgerApi.AssocMap qualified as AssocMap
-import Plutarch.LedgerApi.Value (plovelaceValueOf, pnoAdaValue, pvalueOf)
+import Plutarch.LedgerApi.Value (plovelaceValueOf, pnoAdaValue, pvalueOf, pforgetPositive)
 import Plutarch.LedgerApi.Value qualified as Value 
 import Plutarch.LedgerApi.V2 hiding (PScriptContext)
 import Plutarch.LedgerApi.V3 
@@ -22,9 +22,9 @@ import Plutarch.LedgerApi.Interval (pafter, pbefore)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
-import PriceDiscoveryEvent.Utils (pvalidityRangeStart, pletFieldsSpending, pfromPDatum, passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPrefix, ptryOwnInput, ptryOwnOutput, phasCS, pisFinite, pmustFind, pand'List)
-import Types.Constants (rewardFoldTN)
-import Types.LiquiditySet (PNodeKey(..), PClaimValidatorConfig (..), PAirdropSetNode (..), PLNodeAction (..))
+import Airdrop.Utils (pdivCeil, pvalidityRangeStart, pletFieldsSpending, pfromPDatum, passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPrefix, ptryOwnInput, ptryOwnOutput, phasCS, pisFinite, pmustFind, pand'List)
+import Types.Constants (rewardFoldTN, claimTokenCS, claimTokenTN, totalVestingInstallments)
+import Types.AirdropSet (PNodeKey(..), PClaimValidatorConfig (..), PAirdropSetNode (..), PLNodeAction (..), PVestingDatum(..))
 import Plutarch.Builtin (pforgetData)
 
 pLiquidityGlobalLogicW :: Term s (PAsData PCurrencySymbol :--> PScriptContext :--> PUnit)
@@ -67,33 +67,33 @@ pAirdropSetValidator cfg prefix = plam $ \claimConfig ctx' -> P.do
         (pcontainsCurrencySymbols # pfromData info.mint # potentialNodeCSs)
       (pconstant ())
     PPartialUnlock _ -> P.do
-      claimConfigF <- pletFields @'["vestingPeriodStart", "vestingPeriodEnd"]
+      claimConfigF <- pletFields @'["vestingPeriodStart", "vestingPeriodEnd"] claimConfig
       PScriptCredential ((pfield @"_0" #) -> ownValHash) <- pmatch (pfield @"credential" # ownInputF.address)
-      let ownOutput = ptryOwnOutput # info.outputs # ownValHash
+      let ownOutput = phead @PBuiltinList # info.outputs -- ptryOwnOutput @PBuiltinList # info.outputs # ownValHash
       ownOutputF <- pletFields @'["value", "datum"] ownOutput
       POutputDatum ((pfield @"outputDatum" #) -> ownOutputDatum) <- pmatch ownOutputF.datum
-      
-      PPubKeyCredential ((pfield @"_0" #) -> beneficiaryHash) <- pmatch (pfield @"credential" # vestingDatumF.beneficiary)
+       
       PDJust ((pfield @"_0" #) -> ownInDat) <- pmatch scriptInfoF._1
       ownInputDatumF <- pletFields @'["extraData"] (punsafeCoerce @_ @_ @PAirdropSetNode (pto ownInDat))
       vestingDatumF <- pletFields @'["beneficiary", "totalVestingQty"] (punsafeCoerce @_ @_ @PVestingDatum ownInputDatumF.extraData)
-      let currentTimeApproximation = pvalidityRangeStart # info.validRange 
+      PPubKeyCredential ((pfield @"_0" #) -> beneficiaryHash) <- pmatch (pfield @"credential" # vestingDatumF.beneficiary)
+      let currentTimeApproximation = pfromData $ pvalidityRangeStart # info.validRange 
           vestingTimeRemaining = (pfromData claimConfigF.vestingPeriodEnd) - currentTimeApproximation
           vestingPeriodLength = (pfromData claimConfigF.vestingPeriodEnd) - (pfromData claimConfigF.vestingPeriodStart)
           timeBetweenInstallments = pdivCeil # vestingPeriodLength # totalVestingInstallments
           futureInstallments = pdivCeil # vestingTimeRemaining # timeBetweenInstallments
-          expectedRemainingQty = pdivCeil # (futureInstallments * vestingDatumF.totalVestingQty) #$ totalVestingInstallments
+          expectedRemainingQty = pdivCeil # (futureInstallments * vestingDatumF.totalVestingQty) # totalVestingInstallments
 
-      ownInputVal <- plet ownInputF.value
-      inputVestingTokens <- pvalueOf # claimTokenCS # claimTokenTN # ownInputVal
+      ownInputVal <- plet $ pforgetPositive ownInputF.value
+      inputVestingTokens <- plet $ pvalueOf # ownInputVal # claimTokenCS # claimTokenTN 
       let vestingTokenDelta = expectedRemainingQty - inputVestingTokens 
           claimedTokens = Value.psingleton # claimTokenCS # claimTokenTN # vestingTokenDelta
-      let checks = 
+          checks = 
             pand'List
-             [ (pto ownInDat) #== ownOutputDatum
+             [ (pto ownInDat) #== (pto ownOutputDatum)
              , pelem # beneficiaryHash # info.signatories
              , pfromData info.mint #== mempty
-             , (ownInputVal <> claimedTokens) #== pforgetPositive outputNodeF.value
+             , (ownInputVal <> claimedTokens) #== pforgetPositive ownOutputF.value
              ]
       pif checks 
           (pconstant ()) 
