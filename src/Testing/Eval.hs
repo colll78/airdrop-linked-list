@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Testing.Eval (evalT, evalWithArgsT, psucceeds, passert) where
+module Testing.Eval (evalT, evalWithArgsT, psucceeds, passert, ptraces, toHexString, toBuiltinHexString) where
 
 import Cardano.Binary qualified as CBOR
 import Data.Aeson (KeyValue ((.=)), object)
@@ -35,7 +35,11 @@ import PlutusLedgerApi.V2 (
   ExBudget,
  )
 import Test.Tasty.HUnit
-
+import Data.Word (Word8)
+import Data.Char (toLower)
+import PlutusLedgerApi.V2 (BuiltinByteString)
+import PlutusTx.Prelude qualified as P
+import qualified Data.ByteString as BS
 encodeSerialiseCBOR :: Script -> Text
 encodeSerialiseCBOR = Text.decodeUtf8 . Base16.encode . CBOR.serialize' . serialiseScript
 
@@ -102,3 +106,45 @@ pshouldBe x y = do
 -- | Asserts the term to be true
 passert :: ClosedTerm a -> Assertion
 passert p = p #@?= pconstant True
+
+-- | Asserts that the term evaluates successfully with the given trace sequence
+ptraces :: ClosedTerm a -> [Text] -> Assertion
+ptraces p develTraces =
+  case evalScript $ comp p of
+    (Left _, _, _) -> assertFailure "Term failed to evaluate"
+    (Right _, _, traceLog) ->
+      assertEqual "ptraces: does not match expected" traceLog develTraces
+
+
+toBuiltinHexString :: String -> BuiltinByteString 
+toBuiltinHexString = P.toBuiltin . toHexString
+
+toHexString :: String -> BS.ByteString 
+toHexString = 
+  BS.pack . f
+  where
+    f "" = []
+    f [_] = error "UnevenLength"
+    f (x : y : rest) = (hexDigitToWord8 x * 16 + hexDigitToWord8 y) : f rest
+
+hexDigitToWord8 :: HasCallStack => Char -> Word8
+hexDigitToWord8 = f . toLower
+  where
+    f :: Char -> Word8
+    f '0' = 0
+    f '1' = 1
+    f '2' = 2
+    f '3' = 3
+    f '4' = 4
+    f '5' = 5
+    f '6' = 6
+    f '7' = 7
+    f '8' = 8
+    f '9' = 9
+    f 'a' = 10
+    f 'b' = 11
+    f 'c' = 12
+    f 'd' = 13
+    f 'e' = 14
+    f 'f' = 15
+    f c = error ("InvalidHexDigit " <> [c])

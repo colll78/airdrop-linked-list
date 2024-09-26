@@ -18,9 +18,12 @@ import Plutarch.Prelude
 import PlutusLedgerApi.V2 (BuiltinByteString, PubKeyHash, TokenName, CurrencySymbol, Address)
 import PlutusTx qualified
 import Types.Classes 
-import Plutarch.Builtin (PDataNewtype (PDataNewtype))
+import Plutarch.Unsafe (punsafeCoerce)
+import Plutarch.Builtin (PDataNewtype (PDataNewtype), pforgetData)
 import Plutarch.Bool (pand')
-import MerkleTree.MerklePatriciaForestry (PMerklePatriciaForestry (..))
+import MerkleTree.MerklePatriciaForestry (PMerklePatriciaForestry (..), PProof(..))
+import PriceDiscoveryEvent.Utils (pcond, pand'List)
+import Plutarch.Internal.PlutusType (pcon', pmatch')
 
 data NodeKey = Key BuiltinByteString | Empty
   deriving stock (Show, Eq, Ord, Generic)
@@ -94,7 +97,6 @@ PlutusTx.unstableMakeIsData ''LNodeAction
 data PLNodeAction (s :: S)
   = PLLinkedListAct (Term s (PDataRecord '[]))
   | PPartialUnlock (Term s (PDataRecord '[]))
-  | PFullUnlock (Term s (PDataRecord '[]))
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PShow)
 
@@ -112,39 +114,40 @@ deriving via
 instance PTryFrom PData (PAsData PLNodeAction)
 instance PTryFrom PData PLNodeAction
 
-data PLBELockConfig (s :: S)
-  = PLBELockConfig
+data PClaimValidatorConfig (s :: S)
+  = PClaimValidatorConfig
       ( Term
           s
           ( PDataRecord
               '[ "discoveryDeadline" ':= PPosixTime
-               , "penaltyAddress" ':= PAddress
                , "commitCred" ':= PStakingCredential
                , "rewardCred" ':= PStakingCredential
-               , "rewardFoldCS" ':= PCurrencySymbol
+               , "vestingPeriodStart" ':= PInteger 
+               , "vestingPeriodEnd" ':= PInteger 
                ]
           )
       )
   deriving stock (Generic) 
   deriving anyclass (PlutusType, PIsData, PDataFields, PEq)
 
-instance DerivePlutusType PLBELockConfig where type DPTStrat _ = PlutusTypeData
+instance DerivePlutusType PClaimValidatorConfig where type DPTStrat _ = PlutusTypeData
 
-data PLiquidityConfig (s :: S)
-  = PLiquidityConfig
+data PAirdropConfig (s :: S)
+  = PAirdropConfig
       ( Term
           s
           ( PDataRecord
               '[ "initUTxO" ':= PTxOutRef
-               , "discoveryDeadline" ':= PPosixTime
+               , "claimDeadline" ':= PPosixTime
                , "claimRoot" ':= PMerklePatriciaForestry
+               , "vestingPeriodEnd" ':= PInteger 
                ]
           )
       )
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PDataFields, PEq)
 
-instance DerivePlutusType PLiquidityConfig where type DPTStrat _ = PlutusTypeData
+instance DerivePlutusType PAirdropConfig where type DPTStrat _ = PlutusTypeData
 
 data VestingDatum = VestingDatum
   { beneficiary :: Address
@@ -167,13 +170,7 @@ data PVestingDatum (s :: S)
           s
           ( PDataRecord
               '[ "beneficiary" ':= PAddress
-               , "vestingTN" ':= PTokenName 
-               , "vestingCS" ':= PCurrencySymbol
                , "totalVestingQty" ':= PInteger
-               , "vestingPeriodStart" ':= PInteger
-               , "vestingPeriodEnd" ':= PInteger
-               , "firstUnlockPossibleAfter" ':= PInteger
-               , "totalInstallments" ':= PInteger
                ]
           )
       )
@@ -185,15 +182,15 @@ instance DerivePlutusType PVestingDatum where
 
 instance PTryFrom PData PVestingDatum
 
-data LiquiditySetNode = MkLiquiditySetNode
+data AirdropSetNode = MkAirdropSetNode
   { key :: NodeKey
   , next :: NodeKey
   , committed :: VestingDatum 
   }
   deriving stock (Show, Eq, Generic)
-PlutusTx.unstableMakeIsData ''LiquiditySetNode
+PlutusTx.unstableMakeIsData ''AirdropSetNode
 
-data PLiquiditySetNodeState (s :: S) = PLiquiditySetNodeState
+data PAirdropSetNodeState (s :: S) = PAirdropSetNodeState
   { key :: Term s PNodeKeyState
   , next :: Term s PNodeKeyState
   , committed :: Term s PVestingDatum
@@ -201,10 +198,10 @@ data PLiquiditySetNodeState (s :: S) = PLiquiditySetNodeState
   deriving stock (Generic)
   deriving anyclass (PlutusType, PEq)
 
-instance DerivePlutusType PLiquiditySetNodeState where type DPTStrat _ = PlutusTypeScott
+instance DerivePlutusType PAirdropSetNodeState where type DPTStrat _ = PlutusTypeScott
 
-data PLiquiditySetNode (s :: S)
-  = PLiquiditySetNode
+data PAirdropSetNode (s :: S)
+  = PAirdropSetNode
       ( Term
           s
           ( PDataRecord
@@ -217,21 +214,21 @@ data PLiquiditySetNode (s :: S)
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PDataFields, PEq)
 
-instance DerivePlutusType PLiquiditySetNode where type DPTStrat _ = PlutusTypeData
+instance DerivePlutusType PAirdropSetNode where type DPTStrat _ = PlutusTypeData
 
 deriving anyclass instance
-  PTryFrom PData PLiquiditySetNode
+  PTryFrom PData PAirdropSetNode
 
 deriving anyclass instance
-  PTryFrom PData (PAsData PLiquiditySetNode)
+  PTryFrom PData (PAsData PAirdropSetNode)
 
-instance PUnsafeLiftDecl PLiquiditySetNode where
-  type PLifted PLiquiditySetNode = LiquiditySetNode
+instance PUnsafeLiftDecl PAirdropSetNode where
+  type PLifted PAirdropSetNode = AirdropSetNode
 
 deriving via
-  (DerivePConstantViaData LiquiditySetNode PLiquiditySetNode)
+  (DerivePConstantViaData AirdropSetNode PAirdropSetNode)
   instance
-    PConstantDecl LiquiditySetNode
+    PConstantDecl AirdropSetNode
 
 
 instance ScottConvertible PInteger where
@@ -239,18 +236,18 @@ instance ScottConvertible PInteger where
   toScott i = i
   fromScott i = i
 
--- instance ScottConvertible PLiquiditySetNode where
---   type ScottOf PLiquiditySetNode = PLiquiditySetNodeState
---   toScott discSetNode' = pmatch discSetNode' $ \(PLiquiditySetNode discSetNode) -> pletFields @'["key", "next", "commitment"] discSetNode $ \discSetNodeF -> 
---     pcon (PLiquiditySetNodeState {key = toScott discSetNodeF.key, next = toScott discSetNodeF.next, committed = discSetNodeF.commitment})
+-- instance ScottConvertible PAirdropSetNode where
+--   type ScottOf PAirdropSetNode = PAirdropSetNodeState
+--   toScott discSetNode' = pmatch discSetNode' $ \(PAirdropSetNode discSetNode) -> pletFields @'["key", "next", "commitment"] discSetNode $ \discSetNodeF -> 
+--     pcon (PAirdropSetNodeState {key = toScott discSetNodeF.key, next = toScott discSetNodeF.next, committed = discSetNodeF.commitment})
 --   fromScott discSetNode = pmatch discSetNode $
---       \( PLiquiditySetNodeState
+--       \( PAirdropSetNodeState
 --           { key
 --           , next
 --           , committed 
 --           }
 --         ) -> 
---           (pcon (PLiquiditySetNode 
+--           (pcon (PAirdropSetNode 
 --             (pdcons @"key" # pdata (fromScott key) 
 --               #$ (pdcons @"next" # pdata (fromScott next))
 --               #$ (pdcons @"commitment" # pdata committed)
@@ -271,95 +268,97 @@ data PSeparatorConfig (s :: S)
 
 instance DerivePlutusType PSeparatorConfig where type DPTStrat _ = PlutusTypeData
 
--- mkNode :: Term s (PNodeKey :--> PNodeKey :--> PLiquiditySetNode)
--- mkNode = phoistAcyclic $
---   plam $ \key next ->
---     pcon $
---       PLiquiditySetNode $
---         pdcons @"key" # pdata key
---           #$ pdcons @"next" # pdata next
---           #$ pdcons @"commitment" # pconstantData VestingDatum{}
---           #$ pdnil
+mkNode :: Term s (PNodeKey :--> PNodeKey :--> PVestingDatum :--> PAirdropSetNode)
+mkNode = phoistAcyclic $
+  plam $ \key next vestingDatum ->
+    pcon $
+      PAirdropSetNode $
+        pdcons @"key" # pdata key
+          #$ pdcons @"next" # pdata next
+          #$ pdcons @"extraData" # (punsafeCoerce $ pdata vestingDatum)
+          #$ pdnil
 
--- mkNodeWithCommit :: Term s (PNodeKey :--> PNodeKey :--> PVestingDatum :--> PLiquiditySetNode)
--- mkNodeWithCommit = phoistAcyclic $
---   plam $ \key next commitment ->
---     pcon $
---       PLiquiditySetNode $
---         pdcons @"key" # pdata key
---           #$ pdcons @"next" # pdata next
---           #$ pdcons @"commitment" # pdata commitment
---           #$ pdnil
-
-data LiquidityNodeAction
+data AirdropNodeAction
   = Init
   | Deinit
   | -- | first arg is the key to insert, second arg is the covering node
-    Insert PubKeyHash LiquiditySetNode
+    Insert BuiltinByteString 
   | -- | first arg is the key to remove, second arg is the covering node
-    Remove PubKeyHash LiquiditySetNode
+    Remove BuiltinByteString
   deriving stock (Show, Eq, Generic)
-PlutusTx.unstableMakeIsData ''LiquidityNodeAction
+PlutusTx.unstableMakeIsData ''AirdropNodeAction
 
-data PLiquidityNodeAction (s :: S)
+data PAirdropNodeAction (s :: S)
   = PLInit (Term s (PDataRecord '[]))
   | PLDeinit (Term s (PDataRecord '[]))
-  | PLInsert (Term s (PDataRecord '["keyToInsert" ':= PPubKeyHash, "coveringNode" ':= PLiquiditySetNode]))
-  | PLRemove (Term s (PDataRecord '["keyToRemove" ':= PPubKeyHash, "coveringNode" ':= PLiquiditySetNode]))
+  | PLInsert (Term s (PDataRecord '["keyToInsert" ':= PByteString, "claimData" ':= PSignatureType]))
+  | PLRemove (Term s (PDataRecord '["keyToRemove" ':= PByteString, "coveringNode" ':= PAirdropSetNode]))
   deriving stock (Generic)
   deriving anyclass (PlutusType, PIsData, PEq)
 
-instance DerivePlutusType PLiquidityNodeAction where type DPTStrat _ = PlutusTypeData
+instance DerivePlutusType PAirdropNodeAction where type DPTStrat _ = PlutusTypeData
 
-deriving anyclass instance
-  PTryFrom PData (PAsData PLiquidityNodeAction)
+-- deriving anyclass instance
+--   PTryFrom PData (PAsData PAirdropNodeAction)
 
-instance PUnsafeLiftDecl PLiquidityNodeAction where
-  type PLifted PLiquidityNodeAction = LiquidityNodeAction
-deriving via
-  (DerivePConstantViaData LiquidityNodeAction PLiquidityNodeAction)
-  instance
-    PConstantDecl LiquidityNodeAction
+-- instance PUnsafeLiftDecl PAirdropNodeAction where
+--   type PLifted PAirdropNodeAction = AirdropNodeAction
+-- deriving via
+--   (DerivePConstantViaData AirdropNodeAction PAirdropNodeAction)
+--   instance
+--     PConstantDecl AirdropNodeAction
 
-data PLiquidityHolderDatum (s :: S)
-  = PLiquidityHolderDatum
-      ( Term
-          s
-          ( PDataRecord
-              '[ "lpTokenName" ':= PTokenName
-               , "totalCommitted" ':= PInteger 
-               , "totalLPTokens" ':= PInteger
-               ]
-          )
-      )
+data PSignatureType (s :: S)
+  = Ed25519Signature (Term s (PDataRecord '["signature" ':= PByteString, "network" ':= PNetwork, "amount" ':= PInteger, "claimAddr" ':= PAddress, "proof" ':= PProof]))
+  | SchnorrSignature (Term s (PDataRecord '["signature" ':= PByteString, "network" ':= PNetwork, "amount" ':= PInteger, "claimAddr" ':= PAddress, "proof" ':= PProof]))
+  | EcdsaSecpSignature (Term s (PDataRecord '["signature" ':= PByteString, "network" ':= PNetwork, "amount" ':= PInteger, "claimAddr" ':= PAddress, "proof" ':= PProof]))
   deriving stock (Generic)
-  deriving anyclass (PEq, PlutusType, PIsData, PDataFields)
+  deriving anyclass (PlutusType, PIsData, PEq)
 
-instance DerivePlutusType PLiquidityHolderDatum where
-  type DPTStrat _ = PlutusTypeData
+instance DerivePlutusType PSignatureType where type DPTStrat _ = PlutusTypeData
 
-deriving anyclass instance
-  PTryFrom PData PLiquidityHolderDatum
-  
+data PNetwork (s :: S) = PBitcoin | PEthereum | PCardano | PSolana 
+
+{- |
+  PNetwork is encoded as an Enum, using values of PInteger
+  internally.
+-}
+instance PlutusType PNetwork where
+  type PInner PNetwork = PInteger
+
+  pcon' PBitcoin = 0
+  pcon' PEthereum = 1
+  pcon' PCardano = 2
+  pcon' PSolana = 3
+
+  pmatch' x f =
+    pcond 
+      [ ((x #== 0), (f PBitcoin))
+      , ((x #== 1), (f PEthereum))
+      , ((x #== 2), (f PCardano))
+      , ((x #== 3), (f PSolana))
+      ]
+      perror 
+
 -----------------------------------------------
 -- Helpers:
 
--- mkBSNode :: ClosedTerm (PByteString :--> PByteString :--> PAsData PLiquiditySetNode)
--- mkBSNode = phoistAcyclic $
---   plam $ \key' next' ->
---     let key = pcon $ PKey $ pdcons @"_0" # pdata key' #$ pdnil
---         next = pcon $ PKey $ pdcons @"_0" # pdata next' #$ pdnil
---      in pdata $ mkNode # key # next 
+mkBSNode :: ClosedTerm (PByteString :--> PByteString :--> PVestingDatum :--> PAirdropSetNode)
+mkBSNode = phoistAcyclic $
+  plam $ \key' next' vestingDatum ->
+    let key = pcon $ PKey $ pdcons @"_0" # pdata key' #$ pdnil
+        next = pcon $ PKey $ pdcons @"_0" # pdata next' #$ pdnil
+     in mkNode # key # next # vestingDatum 
 
 -- | Checks that the node is the empty head node and the datum is empty
-isEmptySet :: ClosedTerm (PAsData PLiquiditySetNode :--> PBool)
+isEmptySet :: ClosedTerm (PAsData PAirdropSetNode :--> PBool)
 isEmptySet = phoistAcyclic $
   plam $ \head -> P.do
-    keys <- pletFields @'["key", "next"] head
-    isNothing # pfromData keys.key #&& isNothing # pfromData keys.next
+    keys <- pletFields @'["key", "next", "extraData"] head
+    isNothing # pfromData keys.key #&& isNothing # pfromData keys.next #&& keys.extraData #== (pforgetData $ pconstantData ()) 
 
 -- | Checks that a PubKeyHash does belong to the first Node in the set.
-isFirstNode :: ClosedTerm (PByteString :--> PLiquiditySetNode :--> PBool)
+isFirstNode :: ClosedTerm (PByteString :--> PAirdropSetNode :--> PBool)
 isFirstNode = phoistAcyclic $
   plam $ \key node -> P.do
     keys <- pletFields @'["key", "next"] node
@@ -369,7 +368,7 @@ isFirstNode = phoistAcyclic $
       _ -> pcon PFalse
 
 -- | Checks that a PubkeyHash does belong to the last Node in a set.
-isLastNode :: ClosedTerm (PByteString :--> PLiquiditySetNode :--> PBool)
+isLastNode :: ClosedTerm (PByteString :--> PAirdropSetNode :--> PBool)
 isLastNode = phoistAcyclic $
   plam $ \key node -> P.do
     keys <- pletFields @'["key", "next"] node
@@ -385,46 +384,29 @@ isNothing = phoistAcyclic $
     PKey _ -> pcon PFalse
     PEmpty _ -> pcon PTrue
 
-{- | @
-  node `asPredecessorOf` next
-  @ makes @node@ to be a predecessor of a node with *key* @next@
-  Seen as if the node between them was removed.
-  @node.key@ remains the same, @node.next@ changes to @next@.
--}
--- asPredecessorOf :: ClosedTerm (PAsData PLiquiditySetNode :--> PByteString :--> PLiquiditySetNode)
--- asPredecessorOf = phoistAcyclic $
---   plam $ \node next ->
---     let nodeKey = pfromData $ pfield @"key" # node
---         nextPK = pcon $ PKey $ pdcons @"_0" # pdata next #$ pdnil
---      in mkNode # nodeKey # nextPK
-
-pisInsertedOnNode :: ClosedTerm (PNodeKey :--> PNodeKey :--> PAsData PLiquiditySetNode :--> PBool)
+pisInsertedOnNode :: ClosedTerm (PNodeKey :--> PNodeKey :--> PData :--> PAsData PAirdropSetNode :--> PBool)
 pisInsertedOnNode = phoistAcyclic $
-  plam $ \insertedKey coveringKey outputNode -> P.do
-    outputNodeDatum <- pletFields @'["key", "next"] outputNode
-    pand' # (outputNodeDatum.key #== coveringKey) # (outputNodeDatum.next #== insertedKey)
+  plam $ \insertedKey coveringKey expectedExtraData outputNode -> P.do
+    outputNodeDatum <- pletFields @'["key", "next", "extraData"] outputNode
+    pand'List 
+      [ (outputNodeDatum.key #== coveringKey)
+      , (outputNodeDatum.next #== insertedKey)
+      , (outputNodeDatum.extraData #== expectedExtraData)
+      ]
 
-pisInsertedNode :: ClosedTerm (PNodeKey :--> PNodeKey :--> PAsData PLiquiditySetNode :--> PBool)
+pisInsertedNode :: ClosedTerm (PNodeKey :--> PNodeKey :--> PData :--> PAsData PAirdropSetNode :--> PBool)
 pisInsertedNode = phoistAcyclic $ 
-  plam $ \insertedKey coveringNext outputNode ->
-    pletFields @'["key", "next"] outputNode $ \outputNodeDatumF ->
-      pand' # (outputNodeDatumF.key #== insertedKey) # (outputNodeDatumF.next #== coveringNext)
+  plam $ \insertedKey coveringNext expectedExtraData outputNode ->
+    pletFields @'["key", "next", "extraData"] outputNode $ \outputNodeDatumF ->
+      pand'List 
+        [ (outputNodeDatumF.key #== insertedKey)
+        , (outputNodeDatumF.next #== coveringNext)
+        , (outputNodeDatumF.extraData #== expectedExtraData)
+        ]
 
-{- | @
-    key `asSuccessorOf` node
-  @ makes @node@ to be a successor of a node with *next* @key@
-  Seen as if the node between them was removed.
-  @node.next@ remains the same, @node.key@ changes to @key@.
--}
--- asSuccessorOf :: ClosedTerm (PByteString :--> PAsData PLiquiditySetNode :--> PLiquiditySetNode)
--- asSuccessorOf = phoistAcyclic $
---   plam $ \key node ->
---     let nodeNext = pfromData $ pfield @"next" # node
---         keyPK = pcon $ PKey $ pdcons @"_0" # pdata key #$ pdnil
---      in mkNode # keyPK # nodeNext
 
 -- | Extracts the next node key
-getNextPK :: ClosedTerm (PAsData PLiquiditySetNode :--> PMaybe PPubKeyHash)
+getNextPK :: ClosedTerm (PAsData PAirdropSetNode :--> PMaybe PPubKeyHash)
 getNextPK = phoistAcyclic $
   plam $ \node ->
     let nextNodeKey = pfromData $ pfield @"next" # node
@@ -433,7 +415,7 @@ getNextPK = phoistAcyclic $
           PKey ((pfield @"_0" #) -> n) -> pcon $ PJust $ pcon $ PPubKeyHash $ pcon $ PDataNewtype n
 
 -- | Extracts the node key
-getCurrentPK :: ClosedTerm (PAsData PLiquiditySetNode :--> PMaybe PPubKeyHash)
+getCurrentPK :: ClosedTerm (PAsData PAirdropSetNode :--> PMaybe PPubKeyHash)
 getCurrentPK = phoistAcyclic $
   plam $ \node ->
     let nodeKey = pfromData $ pfield @"key" # node
@@ -445,7 +427,7 @@ getCurrentPK = phoistAcyclic $
 {- | Checks whether @SetNode@ key is less than next node key.
   Any valid sequence of nodes MUST follow this property.
 -}
-validNode :: ClosedTerm (PAsData PLiquiditySetNode :--> PBool)
+validNode :: ClosedTerm (PAsData PAirdropSetNode :--> PBool)
 validNode = phoistAcyclic $
   plam $ \node -> P.do
     nodeDatum <- pletFields @'["key", "next"] node
@@ -456,7 +438,7 @@ validNode = phoistAcyclic $
         PKey ((pfield @"_0" #) -> next) ->
           pfromData key #< pfromData next -- nodes ordered incrementally
 
-coversLiquidityKey :: ClosedTerm (PAsData PLiquiditySetNode :--> PByteString :--> PBool)
+coversLiquidityKey :: ClosedTerm (PAsData PAirdropSetNode :--> PByteString :--> PBool)
 coversLiquidityKey = phoistAcyclic $
   plam $ \datum keyToCover -> P.do
     nodeDatum <- pletFields @'["key", "next"] datum

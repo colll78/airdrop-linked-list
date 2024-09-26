@@ -3,18 +3,35 @@
 module Types.Constants where
 
 import Plutarch
-import Plutarch.LedgerApi.V1 (PTokenName (..))
+import Plutarch.LedgerApi.V1 (PTokenName (..), PCurrencySymbol(..), PPubKeyHash(..))
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
-import PlutusLedgerApi.V1 (TokenName)
+import PlutusLedgerApi.V1 (TokenName, CurrencySymbol)
 import PriceDiscoveryEvent.Utils (pnonew, passert, pisPrefixOf)
 import Plutarch.Builtin (PDataNewtype(..))
+import MerkleTree.MerklePatriciaForestry
+import Plutarch.ByteString
 
-projectTokenHolderTN :: Term s PTokenName
-projectTokenHolderTN =
+claimRoot :: ClosedTerm PMerklePatriciaForestry
+claimRoot = pfrom_root # phexByteStr "74c61b3b5584c4434f03bc9acbe31d2d2186576e257f1fd85c997916d6df5715"
+
+totalVestingInstallments :: ClosedTerm PInteger 
+totalVestingInstallments = 4
+
+airdropOperator :: ClosedTerm (PAsData PPubKeyHash)
+airdropOperator = pconstantData "deadbeef"
+
+claimTokenTN :: Term s PTokenName
+claimTokenTN =
   let tn :: TokenName
-      tn = "PTHolder"
+      tn = "FooToken"
    in pconstant tn
+
+claimTokenCS :: Term s PCurrencySymbol
+claimTokenCS =
+  let cs :: CurrencySymbol
+      cs = "deadbeef"
+   in pconstant cs
 
 commitFoldTN :: Term s PTokenName
 commitFoldTN =
@@ -32,12 +49,6 @@ poriginNodeTN :: Term s PTokenName
 poriginNodeTN =
   let tn :: TokenName
       tn = "FSN"
-   in pconstant tn
-
-pcorrNodeTN :: Term s PTokenName
-pcorrNodeTN =
-  let tn :: TokenName
-      tn = "FCN"
    in pconstant tn
 
 psetNodePrefix :: ClosedTerm PByteString
@@ -70,4 +81,4 @@ nodeDepositAda :: Term s PInteger
 nodeDepositAda = pconstant 5_000_000
 
 minAdaToCommit :: Term s PInteger 
-minAdaToCommit = pconstant 6_000_000
+minAdaToCommit = pconstant 3_000_000

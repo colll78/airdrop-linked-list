@@ -19,6 +19,7 @@ import PriceDiscoveryEvent.Utils (pand'List)
 import Plutarch.Monadic qualified as P
 import Data.Word (Word8)
 import Testing.MerklePatriciaForestry qualified as MPF
+import Testing.Crypto qualified as Crypto
 
 genByteString :: Gen BS.ByteString
 genByteString = do
@@ -115,11 +116,5 @@ tests = testGroup "Helper Tests"
       [ QC.testProperty "merkle_4 property" merkle_4_test
       ]
   , MPF.tests
+  , Crypto.tests 
   ]
-
--- | Asserts the term evaluates successfully without failing
--- psucceeds :: ClosedTerm a -> Assertion
--- psucceeds p =
---   case evalScript $ comp p of
---     (Left _, _, _) -> assertFailure "Term failed to evaluate"
---     (Right _, _, _) -> pure ()

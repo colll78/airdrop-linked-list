@@ -5,7 +5,6 @@ module LiquidityEvent.Mint.Common (
   pDeinit,
   pRemove,
   pInsert,
-  pClaim
 ) where
 
 import Plutarch.LedgerApi.Value (plovelaceValueOf, pnormalize, pvalueOf)
@@ -42,9 +41,11 @@ import PriceDiscoveryEvent.Utils (
   pnonew,
   pmapFilter,
  )
-import Types.Constants (minAda, nodeDepositAda, minAdaToCommit, pcorrNodeTN, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
+import Types.Constants (minAda, nodeDepositAda, minAdaToCommit, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
 import Types.LiquiditySet
 import Plutarch.LedgerApi.V3 
+import Plutarch.Builtin (PDataNewtype(..), pforgetData)
+import Airdrop.Crypto
 
 {- | Ensures that the minted amount of the FinSet CS is exactly the specified
      tokenName and amount
@@ -70,7 +71,7 @@ nodeInputUtxoDatum ::
   ClosedTerm
     ( PAsData PCurrencySymbol
         :--> PTxOut
-        :--> PMaybe (PAsData PLiquiditySetNode)
+        :--> PMaybe (PAsData PAirdropSetNode)
     )
 nodeInputUtxoDatum = phoistAcyclic $
   plam $ \nodeCS out -> P.do
@@ -83,7 +84,7 @@ nodeInputUtxoDatum = phoistAcyclic $
 nodeInputUtxoDatumUnsafe ::
   ClosedTerm
     ( PTxOut
-        :--> PPair (PValue 'Sorted 'Positive) (PAsData PLiquiditySetNode)
+        :--> PPair (PValue 'Sorted 'Positive) (PAsData PAirdropSetNode)
     )
 nodeInputUtxoDatumUnsafe = phoistAcyclic $
   plam $ \out -> pletFields @'["value", "datum"] out $ \outF ->
@@ -95,7 +96,7 @@ parseNodeOutputUtxo ::
   ClosedTerm
     ( PAsData PCurrencySymbol
         :--> PTxOut
-        :--> PPair (PValue 'Sorted 'Positive) (PAsData PLiquiditySetNode)
+        :--> PPair (PValue 'Sorted 'Positive) (PAsData PAirdropSetNode)
     )
 parseNodeOutputUtxo cfg = phoistAcyclic $
   plam $ \nodeCS out -> P.do
@@ -128,7 +129,6 @@ makeCommon ::
     s
     ( PPriceDiscoveryCommon s
     , Term s (PBuiltinList PTxInInfo)
-    , Term s (PBuiltinList PTxOut)
     , Term s (PBuiltinList (PAsData PPubKeyHash))
     , Term s (PInterval PPosixTime)
     )
@@ -153,7 +153,7 @@ makeCommon cfg ctx' = do
   -- insAsOuts <- tcont . plet $ pmap # plam (pfield @"resolved" #) # info.inputs
   -- onlyAtNodeVal <- tcont . plet $ pfilter @PBuiltinList # plam (\txo -> (hasNodeTk # (pfield @"value" # txo)))
   txInputs <- tcont . plet $ punsafeCoerce @_ @_ @(PBuiltinList PTxInInfo) info.inputs 
-  txOutputs <- tcont . plet $ punsafeCoerce @_ @_ @(PBuiltinList PTxOut) info.outputs 
+  let txOutputs = punsafeCoerce @_ @_ @(PBuiltinList PTxOut) info.outputs 
   fromNodeValidator <- tcont . plet $ pmapFilter @PBuiltinList # plam (\txo -> (hasNodeTk # (pfield @"value" # txo))) # plam (pfield @"resolved" #) # txInputs
   toNodeValidator <- tcont . plet $ pfilter @PBuiltinList # plam (\txo -> (hasNodeTk # (pfield @"value" # txo))) # txOutputs
   ------------------------------
@@ -191,7 +191,6 @@ makeCommon cfg ctx' = do
   pure
     ( common
     , txInputs 
-    , txOutputs 
     , info.signatories
     , vrange
     )
@@ -214,14 +213,19 @@ pInit cfg common = P.do
   pconstant ()
 
 -- TODO add deadline check
-pDeinit :: forall s. Config -> PPriceDiscoveryCommon s -> Term s PUnit
-pDeinit cfg common = P.do
+pDeinit :: forall s. PPriceDiscoveryCommon s -> Term s PUnit
+pDeinit common = P.do
   -- Input Checks
-  -- The following commented code should be used instead for protocols where node removal
+
+  -- The following code should be used instead for protocols where node removal
   -- needs to preserve the integrity of the linked list.
-  PPair _ otherNodes <- pmatch $ pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isEmptySet # dat)) # common.nodeInputs
-  -- PPair _ otherNodes <- pmatch $ pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isNothing # (pfield @"key" # dat))) # common.nodeInputs
+  -- PPair _ otherNodes <- pmatch $ pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isEmptySet # dat)) # common.nodeInputs
+  
+  -- If order does not need to be preserved for head removal:
+  PPair _ otherNodes <- pmatch $ pfindWithRest # plam (\nodePair -> pmatch nodePair (\(PPair _ dat) -> isNothing # (pfield @"key" # dat))) # common.nodeInputs
+  
   passert "Deinit must spend exactly one node" $ pnull # otherNodes
+  
   -- Output Checks:
   passert "Deinit must not output nodes" $ pnull # common.nodeOutputs
 
@@ -235,22 +239,22 @@ pInsert ::
   forall (s :: S).
   Config ->
   PPriceDiscoveryCommon s ->
-  Term s (PAsData PPubKeyHash :--> PAsData PLiquiditySetNode :--> PUnit)
-pInsert cfg common = plam $ \pkToInsert node -> P.do
-  keyToInsert <- plet $ pnonew $ pfromData pkToInsert 
+  Term s (PAsData PByteString :--> PAsData PVestingDatum :--> PUnit)
+pInsert cfg common = plam $ \pkToInsert expectedDatum -> P.do
+  keyToInsert <- plet $ pfromData pkToInsert 
   
   -- Input Checks:
   -- There is only one spent node (tx inputs contains only one node UTxO)
   -- The spent node indeed covers the key we want to insert
   PPair coveringValue coveringDatum <- pmatch $ pheadSingleton # common.nodeInputs
   passert "Spent node should cover inserting key" $ coversLiquidityKey # coveringDatum # keyToInsert
-
+  
   -- Output Checks:
-  coveringDatumF <- pletFields @'["key", "next"] coveringDatum 
+  coveringDatumF <- pletFields @'["key", "next", "extraData"] coveringDatum 
 
   nodeKeyToInsert <- plet $ pcon $ PKey $ pdcons @"_0" # pdata keyToInsert #$ pdnil
-  isInsertedOnNode <- plet $ pisInsertedOnNode # nodeKeyToInsert # coveringDatumF.key 
-  isInsertedNode <- plet $ pisInsertedNode # nodeKeyToInsert # coveringDatumF.next 
+  isInsertedOnNode <- plet $ pisInsertedOnNode # nodeKeyToInsert # coveringDatumF.key # coveringDatumF.extraData 
+  isInsertedNode <- plet $ pisInsertedNode # nodeKeyToInsert # coveringDatumF.next # pforgetData expectedDatum 
 
   passert "Incorrect node outputs for Insert" $
     pany
@@ -266,27 +270,28 @@ pInsert cfg common = plam $ \pkToInsert node -> P.do
 
 pRemove ::
   forall (s :: S).
-  Config ->
   PPriceDiscoveryCommon s ->
-  Term s (PInterval PPosixTime) ->
-  Term s PLiquidityConfig ->
-  Term s (PBuiltinList PTxOut) ->
   Term s (PBuiltinList (PAsData PPubKeyHash)) ->
-  Term s (PAsData PPubKeyHash :--> PAsData PLiquiditySetNode :--> PUnit)
-pRemove cfg common vrange discConfig outs sigs = plam $ \pkToRemove node -> P.do
-  perror 
-
-pClaim ::
-  forall (s :: S).
-  Config ->
-  PPriceDiscoveryCommon s ->  Term s (PBuiltinList PTxOut) ->
-  Term s (PBuiltinList (PAsData PPubKeyHash)) ->
-  Term s (PAsData PPubKeyHash :--> PUnit)
-pClaim cfg common outs sigs = plam $ \pkToRemove -> P.do
-  keyToRemove <- plet $ pnonew $ pfromData pkToRemove
-  
+  Term s (PAsData PByteString :--> PUnit)
+pRemove common sigs = plam $ \pkToRemove -> P.do
+  keyToRemove <- plet $ pfromData pkToRemove
   -- Input Checks
-  PPair removedValue _removedDatum <- pmatch (pheadSingleton # common.nodeInputs)
+  PPair removedValue removedDatum <- pmatch (pheadSingleton # common.nodeInputs)
+
+  removedDatumF <- pletFields @'["key", "next", "extraData"] removedDatum 
+  vestingDatumF <- pletFields @'["beneficiary"] (punsafeCoerce @_ @_ @PVestingDatum removedDatumF.extraData)
+  
+  PPubKeyCredential ((pfield @"_0" #) -> beneficiaryHash) <- pmatch (pfield @"credential" # vestingDatumF.beneficiary)
+  
+  -- Enable if you want to allow scripts to claim the airdrop
+  -- Also must check that either the ownerCred signs the tx or
+  -- the associated script is invoked in the tx (ie cred in txInfoWithdrawals or cs in txInfoMint) 
+  -- let credential = pfield @"credential" # vestingDatumF.beneficiary 
+  --     isAuthed = pmatch credential $ \case 
+  --                   PPubKeyCredential (pfield @"_0" #) -> pelem # pkh # sigs 
+  --                   PScriptCredential ((pfield @"_0" #) -> 
+  --                     (pfstBuiltin # (phead # pto ctxF.wdrl)) 
+  --                       #== pdata $ pcon $ PStakingHash $ pdcons @"_0" # (pcon $ PScriptCredential $ pdcons @"_0" # validatorHash # pdnil) # pdnil             
 
   nodeToRemoveTN <- plet (pnodeKeyTN # keyToRemove)
 
@@ -296,10 +301,7 @@ pClaim cfg common outs sigs = plam $ \pkToRemove -> P.do
   passert "Incorrect mint for Remove" $
     correctNodeTokenMinted # common.ownCS # nodeToRemoveTN # (-1) # common.mint
 
-  passert "signed by user." (pelem # pkToRemove # sigs)
-          
-  -- verify that this node has been processed by the rewards fold by checking that count of tokens is 3. 
-  passert "Claim broke phase rules." (pcountOfUniqueTokens # removedValue #>= 3)
+  passert "signed by user." (pelem # beneficiaryHash # sigs)
 
   pconstant ()
 
@@ -309,9 +311,9 @@ data PPriceDiscoveryCommon (s :: S) = MkCommon
   -- ^ state token (own) CS
   , mint :: Term s (PValue 'Sorted 'NonZero)
   -- ^ value minted in current Tx
-  , nodeInputs :: Term s (PList (PPair (PValue 'Sorted 'Positive) (PAsData PLiquiditySetNode)))
+  , nodeInputs :: Term s (PList (PPair (PValue 'Sorted 'Positive) (PAsData PAirdropSetNode)))
   -- ^ current Tx outputs to AuctionValidator
-  , nodeOutputs :: Term s (PList (PPair (PValue 'Sorted 'Positive) (PAsData PLiquiditySetNode)))
+  , nodeOutputs :: Term s (PList (PPair (PValue 'Sorted 'Positive) (PAsData PAirdropSetNode)))
   -- ^ current Tx inputs
   }
   deriving stock (Generic)

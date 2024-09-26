@@ -20,15 +20,15 @@
     "CHaP_2": {
       "flake": false,
       "locked": {
-        "lastModified": 1719233847,
-        "narHash": "sha256-569bi4WS+xZek1JitRhDDUovdiGMRIXS65yicgg+i9I=",
-        "owner": "input-output-hk",
+        "lastModified": 1727283384,
+        "narHash": "sha256-U7ruDveIZWjzQII0LFBx/HPS3wl3qB9/D+AVApWAKos=",
+        "owner": "IntersectMBO",
         "repo": "cardano-haskell-packages",
-        "rev": "faab2780b99436e9b4bc953cc7c653d524dfd71d",
+        "rev": "baec813592baf2e3c2ff395944cdbd44295349fb",
         "type": "github"
       },
       "original": {
-        "owner": "input-output-hk",
+        "owner": "IntersectMBO",
         "ref": "repo",
         "repo": "cardano-haskell-packages",
         "type": "github"
@@ -2340,17 +2340,17 @@
         "pre-commit-hooks": "pre-commit-hooks"
       },
       "locked": {
-        "lastModified": 1721258487,
-        "narHash": "sha256-BcqNHF4LCHwGs+Q+nPKNDOAPZwPvBhKDb7f3s/kkFho=",
-        "owner": "Plutonomicon",
+        "lastModified": 1727293172,
+        "narHash": "sha256-ZqlMwKbNHgGW6WkrZG/N8HLkIr5DcwIKMUCl/j4k+Bw=",
+        "owner": "colll78",
         "repo": "plutarch-plutus",
-        "rev": "e50661e24670974b398be19426617bc6389fdac6",
+        "rev": "56525f24b3a43dc911be1ea79a355ad6be32d1f9",
         "type": "github"
       },
       "original": {
-        "owner": "Plutonomicon",
+        "owner": "colll78",
         "repo": "plutarch-plutus",
-        "rev": "e50661e24670974b398be19426617bc6389fdac6",
+        "rev": "56525f24b3a43dc911be1ea79a355ad6be32d1f9",
         "type": "github"
       }
     },

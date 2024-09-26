@@ -16,8 +16,12 @@ import Plutarch.Prelude
 import qualified Plutarch.LedgerApi.Value as Value
 import Plutarch.Internal
 import Plutarch.Builtin
+import Plutarch.Num
+import Plutarch.LedgerApi.Interval (PInterval(..))
 import Plutarch.DataRepr.Internal.Field
     ( HRec(..), Labeled(Labeled) )  
+
+type PPosixTimeRange = PInterval PPosixTime
 
 type PScriptInfoHRec (s :: S) =
   HRec
@@ -740,3 +744,47 @@ pmapAndConvertList :: (PIsListLike listA a, PIsListLike listB b) => Term s ((a :
 pmapAndConvertList = phoistAcyclic $
   plam $ \f ->
     pfix #$ plam $ \self xs -> pelimList (\y ys -> pcons # (f # y) # (self # ys)) pnil xs 
+
+pintToByteString :: Term s (PInteger :--> PByteString)
+pintToByteString = phoistAcyclic $
+  pfix #$ plam $ \self n ->
+    plet
+      (pquot # abs n # 10)
+      ( \q ->
+          plet (prem # abs n # 10) $ \r ->
+            pif
+              (q #== 0)
+              (pshowDigit # r)
+              ( plet (self # q) $ \prefix ->
+                  prefix <> pshowDigit # r
+              )
+      )
+
+pshowDigit :: Term s (PInteger :--> PByteString)
+pshowDigit = phoistAcyclic $
+  plam $ \digit ->
+    pcond 
+      [ ((digit #== 0), pconstant "0")
+      , ((digit #== 1), pconstant "1")
+      , ((digit #== 2), pconstant "2")
+      , ((digit #== 3), pconstant "3")
+      , ((digit #== 4), pconstant "4")
+      , ((digit #== 5), pconstant "5")
+      , ((digit #== 6), pconstant "6")
+      , ((digit #== 7), pconstant "7")
+      , ((digit #== 8), pconstant "8")
+      , ((digit #== 9), pconstant "9")
+      ]
+      perror 
+
+pvalidityRangeStart :: Term s (PPosixTimeRange :--> (PAsData PPosixTime))
+pvalidityRangeStart = phoistAcyclic $ plam $ \timeRange -> P.do 
+  PInterval ((pfield @"from" #) -> from) <- pmatch timeRange
+  PLowerBound lb <- pmatch from
+  PFinite ((pfield @"_0" #) -> posixTime) <- pmatch (pfield @"_0" # lb)
+  posixTime
+
+pdivCeil :: (PIntegral a, PNum a) => Term s (a :--> a :--> a)
+pdivCeil = phoistAcyclic $
+  plam $
+    \x y -> 1 + pdiv # (x - 1) # y

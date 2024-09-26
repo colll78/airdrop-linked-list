@@ -13,7 +13,7 @@ let
     src = ../.;
     name = "airdrop-contracts";
     compiler-nix-name = "ghc966";
-    index-state = "2024-06-17T12:18:52Z";
+    index-state = "2024-09-17T19:03:21Z";
     inputMap = {
       "https://chap.intersectmbo.org/" = inputs.CHaP;
     };

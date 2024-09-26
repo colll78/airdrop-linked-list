@@ -21,12 +21,16 @@ import LiquidityEvent.Mint.Common (
   pInit,
   pInsert,
   pRemove,
-  pClaim
  )
 
 import Plutarch.Prelude
-import PriceDiscoveryEvent.Utils (pand'List, passert, pcond, pisFinite, phasUTxO)
-import Types.LiquiditySet (PLiquidityConfig (..), PLiquidityNodeAction (..))
+import PriceDiscoveryEvent.Utils (pand'List, passert, pcond, pisFinite, phasUTxO, pintToByteString)
+import Types.LiquiditySet (PAirdropConfig (..), PAirdropNodeAction (..), PSignatureType(..), PVestingDatum(..))
+import Types.Constants (claimRoot, airdropOperator)
+import Airdrop.Crypto (pethereumPubKeyToPubKeyHash, pcompressPublicKey)
+import Plutarch.Builtin (pserialiseData, pforgetData, PDataNewtype(..))
+import MerkleTree.MerklePatriciaForestry (phas)
+import Plutarch.Crypto (pverifyEcdsaSecp256k1Signature, pblake2b_256)
 
 --------------------------------
 -- FinSet Node Minting Policy:
@@ -35,53 +39,72 @@ import Types.LiquiditySet (PLiquidityConfig (..), PLiquidityNodeAction (..))
 mkLiquidityNodeMP ::
   Config ->
   ClosedTerm
-    ( PLiquidityConfig
-        :--> PLiquidityNodeAction
+    ( PAirdropConfig
+        :--> PAirdropNodeAction
         :--> PScriptContext
         :--> PUnit
     )
-mkLiquidityNodeMP cfg = plam $ \discConfig redm ctx -> P.do
-  configF <- pletFields @'["initUTxO"] discConfig
+mkLiquidityNodeMP cfg = plam $ \claimConfig redm ctx -> P.do
 
-  (common, inputs, outs, sigs, vrange) <-
+  (common, inputs, sigs, vrange) <-
     runTermCont $
       makeCommon cfg ctx
 
   pmatch redm $ \case
     PLInit _ -> P.do
+      claimConfigF <- pletFields @'["initUTxO"] claimConfig
       passert "Init must consume TxOutRef" $
-        phasUTxO # configF.initUTxO # inputs
+        phasUTxO # claimConfigF.initUTxO # inputs
       pInit cfg common
-    PLDeinit _ ->
-      -- TODO deinit must check that reward fold has been completed
-      pDeinit cfg common
+    PLDeinit _ -> P.do
+      claimConfigF <- pletFields @'["vestingPeriodEnd"] claimConfig
+      passert "vrange not finite" (pisFinite # vrange)
+      passert "vrange not finite" (pelem # airdropOperator # sigs)
+      vestingEnd <- plet (pcon $ PPosixTime $ pcon $ PDataNewtype $ claimConfigF.vestingPeriodEnd)
+      pcond           
+        [ ((pbefore # vestingEnd # vrange), (pDeinit common))
+        ]
+        perror 
     PLInsert action -> P.do
-      act <- pletFields @'["keyToInsert", "coveringNode"] action
+      claimConfigF <- pletFields @'["claimDeadline"] claimConfig
+      act <- pletFields @'["keyToInsert", "claimData"] action
+
+      pkToInsert <- plet act.keyToInsert
+      EcdsaSecpSignature claimData <- pmatch act.claimData 
+      claimDataF <- pletFields @'["signature", "amount", "claimAddr", "proof"] claimData
+      claimAddress <- plet $ claimDataF.claimAddr 
+      let expectedVesting = pdata $ pcon $ PVestingDatum $ 
+            pdcons @"beneficiary" # claimAddress
+              #$ pdcons @"totalVestingQty" # claimDataF.amount
+              #$ pdnil   
+          msg = pblake2b_256 #$ pserialiseData # pforgetData claimAddress
+          eth_compressed_pub_key = pcompressPublicKey pkToInsert
+
+      pkhToInsert <- plet $ pethereumPubKeyToPubKeyHash # pkToInsert
       let insertChecks =
             pand'List
               [ pisFinite # vrange
-              , pafter # (pfield @"discoveryDeadline" # discConfig) # vrange
-              , pelem # act.keyToInsert # sigs
+              , pafter # claimConfigF.claimDeadline # vrange
+              , (pverifyEcdsaSecp256k1Signature # eth_compressed_pub_key # msg # claimDataF.signature)
+              , phas # claimRoot # pkhToInsert # (pintToByteString # claimDataF.amount) # claimDataF.proof
               ]
-      pif insertChecks (pInsert cfg common # act.keyToInsert # act.coveringNode) perror
-    PLRemove action -> P.do
-      perror 
-      -- configF <- pletFields @'["discoveryDeadline"] discConfig
-      -- act <- pletFields @'["keyToRemove", "coveringNode"] action
-      -- discDeadline <- plet (pfromData configF.discoveryDeadline)
-      -- passert "vrange not finite" (pisFinite # vrange)
-      -- pcond 
-      --   [ ((pbefore # (discDeadline + 86_400_000) # vrange), (pClaim cfg common outs sigs # act.keyToRemove))
-      --   , ((pafter # discDeadline # vrange), (pRemove cfg common vrange discConfig outs sigs # act.keyToRemove # act.coveringNode))
-      --   ]
-      --   perror 
+      pif insertChecks (pInsert cfg common # pdata pkhToInsert # expectedVesting) perror
+    PLRemove action -> P.do 
+      claimConfigF <- pletFields @'["vestingPeriodEnd"] claimConfig
+      act <- pletFields @'["keyToRemove"] action
+      vestingEnd <- plet (pcon $ PPosixTime $ pcon $ PDataNewtype $ claimConfigF.vestingPeriodEnd)
+      passert "vrange not finite" (pisFinite # vrange)
+      pcond 
+        [ ((pbefore # vestingEnd # vrange), (pRemove common sigs # act.keyToRemove))
+        ]
+        perror 
 
 mkLiquidityNodeMPW ::
   Config ->
   ClosedTerm
-    ( PLiquidityConfig
+    ( PAirdropConfig
         :--> PScriptContext :--> PUnit 
     )
-mkLiquidityNodeMPW cfg = phoistAcyclic $ plam $ \discConfig ctx ->
-  let red = punsafeCoerce @_ @_ @PLiquidityNodeAction (pto (pfield @"redeemer" # ctx))
-   in mkLiquidityNodeMP cfg # discConfig # red # ctx
+mkLiquidityNodeMPW cfg = phoistAcyclic $ plam $ \claimConfig ctx ->
+  let red = punsafeCoerce @_ @_ @PAirdropNodeAction (pto (pfield @"redeemer" # ctx))
+   in mkLiquidityNodeMP cfg # claimConfig # red # ctx

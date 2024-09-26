@@ -167,6 +167,7 @@ library
 
   import:             lang
   exposed-modules:
+    Airdrop.Crypto
     LiquidityEvent.Mint.Common
     LiquidityEvent.Mint.Standard
     LiquidityEvent.Validator
@@ -176,7 +177,6 @@ library
     PriceDiscoveryEvent.Utils
     Types.Classes
     Types.Constants
-    Types.DiscoverySet
     Types.LiquiditySet
 
   -- Compile
@@ -191,6 +191,7 @@ library
     , plutarch
     , plutarch-extra
     , plutarch-ledger-api
+    , plutus-core
     , plutus-ledger-api
     , plutus-tx
     , serialise
@@ -243,14 +244,17 @@ test-suite helpers-tests
   main-is:          Test.hs
   hs-source-dirs:   src src/Testing
   other-modules:
+    Airdrop.Crypto
     MerkleTree.Helpers
     MerkleTree.MerklePatriciaForestry
     MerkleTree.Merkling
     PriceDiscoveryEvent.Utils
+    Testing.Crypto
     Testing.Eval
     Testing.MerklePatriciaForestry
 
   build-depends:
+    , cardano-crypto-class
     , tasty
     , tasty-hunit
     , tasty-quickcheck
