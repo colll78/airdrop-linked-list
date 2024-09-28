@@ -15,13 +15,14 @@ import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Monadic qualified as P
 import GHC.Generics (Generic)
 import Plutarch.Prelude
-import PlutusLedgerApi.V2 (BuiltinByteString, PubKeyHash, TokenName, CurrencySymbol, Address)
+import PlutusLedgerApi.V2 (BuiltinByteString, PubKeyHash, TokenName, CurrencySymbol, Address, POSIXTime)
+import PlutusLedgerApi.V3 (TxOutRef)
 import PlutusTx qualified
 import Types.Classes 
 import Plutarch.Unsafe (punsafeCoerce)
 import Plutarch.Builtin (PDataNewtype (PDataNewtype), pforgetData)
 import Plutarch.Bool (pand')
-import MerkleTree.MerklePatriciaForestry (PMerklePatriciaForestry (..), PProof(..))
+import MerkleTree.MerklePatriciaForestry (PMerklePatriciaForestry (..), PProof(..), MerklePatriciaForestry)
 import Airdrop.Utils (pcond, pand'List)
 import Plutarch.Internal.PlutusType (pcon', pmatch')
 
@@ -132,6 +133,17 @@ data PClaimValidatorConfig (s :: S)
 
 instance DerivePlutusType PClaimValidatorConfig where type DPTStrat _ = PlutusTypeData
 
+data AirdropConfig = AirdropConfig
+  { initUTxO :: TxOutRef
+  , totalVestingQty :: POSIXTime
+  , claimRoot :: MerklePatriciaForestry 
+  , vestingPeriodEnd :: Integer
+  }
+  deriving stock (Show, Eq, Generic)
+
+PlutusTx.makeLift ''AirdropConfig
+PlutusTx.makeIsDataIndexed ''AirdropConfig [('AirdropConfig, 0)]
+
 data PAirdropConfig (s :: S)
   = PAirdropConfig
       ( Term
@@ -149,15 +161,17 @@ data PAirdropConfig (s :: S)
 
 instance DerivePlutusType PAirdropConfig where type DPTStrat _ = PlutusTypeData
 
+instance PUnsafeLiftDecl PAirdropConfig where
+  type PLifted PAirdropConfig = AirdropConfig
+
+deriving via
+  (DerivePConstantViaData AirdropConfig PAirdropConfig)
+  instance
+    (PConstantDecl AirdropConfig)
+
 data VestingDatum = VestingDatum
   { beneficiary :: Address
-  , vestingTN :: TokenName 
-  , vestingCS :: CurrencySymbol
   , totalVestingQty :: Integer
-  , vestingPeriodStart :: Integer
-  , vestingPeriodEnd :: Integer
-  , firstUnlockPossibleAfter :: Integer
-  , totalInstallments :: Integer
   }
   deriving stock (Show, Eq, Generic)
 
@@ -235,23 +249,6 @@ instance ScottConvertible PInteger where
   type ScottOf PInteger = PInteger
   toScott i = i
   fromScott i = i
-
--- instance ScottConvertible PAirdropSetNode where
---   type ScottOf PAirdropSetNode = PAirdropSetNodeState
---   toScott discSetNode' = pmatch discSetNode' $ \(PAirdropSetNode discSetNode) -> pletFields @'["key", "next", "commitment"] discSetNode $ \discSetNodeF -> 
---     pcon (PAirdropSetNodeState {key = toScott discSetNodeF.key, next = toScott discSetNodeF.next, committed = discSetNodeF.commitment})
---   fromScott discSetNode = pmatch discSetNode $
---       \( PAirdropSetNodeState
---           { key
---           , next
---           , committed 
---           }
---         ) -> 
---           (pcon (PAirdropSetNode 
---             (pdcons @"key" # pdata (fromScott key) 
---               #$ (pdcons @"next" # pdata (fromScott next))
---               #$ (pdcons @"commitment" # pdata committed)
---               #$ pdnil)))
 
 data PSeparatorConfig (s :: S)
   = PSeparatorConfig
@@ -339,6 +336,14 @@ instance PlutusType PNetwork where
       , ((x #== 3), (f PSolana))
       ]
       perror 
+
+data PAirdropMintAction (s :: S)
+  = PMintAirdrop (Term s (PDataRecord '[]))
+  | PBurnAirdrop (Term s (PDataRecord '[]))
+  deriving stock (Generic)
+  deriving anyclass (PlutusType, PIsData, PEq)
+
+instance DerivePlutusType PAirdropMintAction where type DPTStrat _ = PlutusTypeData
 
 -----------------------------------------------
 -- Helpers:

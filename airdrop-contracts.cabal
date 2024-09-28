@@ -175,6 +175,7 @@ library
     MerkleTree.Helpers
     MerkleTree.MerklePatriciaForestry
     MerkleTree.Merkling
+    Scripts.NodeMP
     Types.AirdropSet
     Types.Classes
     Types.Constants

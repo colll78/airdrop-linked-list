@@ -1,6 +1,7 @@
 module Airdrop.Crypto (
   pethereumPubKeyToPubKeyHash,
-  pcompressPublicKey
+  pcompressPublicKey,
+  scriptHashV3
 ) where 
 
 import Plutarch (
@@ -16,7 +17,19 @@ import Plutarch.Crypto (pkeccak_256)
 import Plutarch.Integer (PInteger, pmod)
 import Plutarch.Lift (pconstant) 
 import Plutarch.Bool (pif, (#==))
+import PlutusCore.Crypto.Hash qualified as Hash
+import PlutusLedgerApi.Common (serialiseUPLC)
+import Data.ByteString.Short (fromShort)
+import Plutarch.Script (Script(unScript))
+import Data.ByteString (ByteString)
 
+scriptHashV3 :: Script -> ByteString
+scriptHashV3 = hashScriptWithPrefix "\x03"
+
+hashScriptWithPrefix :: ByteString -> Script -> ByteString
+hashScriptWithPrefix prefix scr = 
+  Hash.blake2b_224
+    $ prefix <> (fromShort . serialiseUPLC . unScript $ scr)
 
 pethereumPubKeyToPubKeyHash :: Term s (PByteString :--> PByteString)
 pethereumPubKeyToPubKeyHash = phoistAcyclic $ plam $ \pubKey -> 

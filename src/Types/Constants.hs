@@ -68,6 +68,16 @@ pparseNodeKey = phoistAcyclic $
     passert "incorrect node prefix" $ pisPrefixOf # psetNodePrefix # tn
     pif (prefixLength #< tnLength) (pcon $ PJust key) (pcon PNothing)
 
+ptryParseNodeKey :: ClosedTerm (PTokenName :--> PByteString)
+ptryParseNodeKey = phoistAcyclic $
+  plam $ \(pnonew -> tn) -> P.do
+    let prefixLength = 3
+        tnLength = plengthBS # tn
+        key = psliceBS # prefixLength # (tnLength - prefixLength) # tn
+    passert "incorrect node prefix" $ pisPrefixOf # psetNodePrefix # tn
+    pif (prefixLength #< tnLength) key perror 
+    
+
 foldingFee :: Term s PInteger
 foldingFee = pconstant 1_000_000
 

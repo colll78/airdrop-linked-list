@@ -37,25 +37,24 @@ import Plutarch.Crypto (pverifyEcdsaSecp256k1Signature, pblake2b_256)
 --------------------------------
 
 mkAirdropNodeMP ::
-  Config ->
   ClosedTerm
     ( PAirdropConfig
         :--> PAirdropNodeAction
         :--> PScriptContext
         :--> PUnit
     )
-mkAirdropNodeMP cfg = plam $ \claimConfig redm ctx -> P.do
+mkAirdropNodeMP = plam $ \claimConfig redm ctx -> P.do
 
   (common, inputs, sigs, vrange) <-
     runTermCont $
-      makeCommon cfg ctx
+      makeCommon ctx
 
   pmatch redm $ \case
     PLInit _ -> P.do
       claimConfigF <- pletFields @'["initUTxO"] claimConfig
       passert "Init must consume TxOutRef" $
         phasUTxO # claimConfigF.initUTxO # inputs
-      pInit cfg common
+      pInit common
     PLDeinit _ -> P.do
       claimConfigF <- pletFields @'["vestingPeriodEnd"] claimConfig
       passert "vrange not finite" (pisFinite # vrange)
@@ -73,9 +72,10 @@ mkAirdropNodeMP cfg = plam $ \claimConfig redm ctx -> P.do
       EcdsaSecpSignature claimData <- pmatch act.claimData 
       claimDataF <- pletFields @'["signature", "amount", "claimAddr", "proof"] claimData
       claimAddress <- plet $ claimDataF.claimAddr 
+      claimAmount <- plet $ claimDataF.amount
       let expectedVesting = pdata $ pcon $ PVestingDatum $ 
             pdcons @"beneficiary" # claimAddress
-              #$ pdcons @"totalVestingQty" # claimDataF.amount
+              #$ pdcons @"totalVestingQty" # claimAmount
               #$ pdnil   
           msg = pblake2b_256 #$ pserialiseData # pforgetData claimAddress
           eth_compressed_pub_key = pcompressPublicKey pkToInsert
@@ -86,9 +86,9 @@ mkAirdropNodeMP cfg = plam $ \claimConfig redm ctx -> P.do
               [ pisFinite # vrange
               , pafter # claimConfigF.claimDeadline # vrange
               , (pverifyEcdsaSecp256k1Signature # eth_compressed_pub_key # msg # claimDataF.signature)
-              , phas # claimRoot # pkhToInsert # (pintToByteString # claimDataF.amount) # claimDataF.proof
+              , phas # claimRoot # pkhToInsert # (pintToByteString # pfromData claimAmount) # claimDataF.proof
               ]
-      pif insertChecks (pInsert cfg common # pdata pkhToInsert # expectedVesting) perror
+      pif insertChecks (pInsert common # pdata pkhToInsert # expectedVesting) perror
     PLRemove action -> P.do 
       claimConfigF <- pletFields @'["vestingPeriodEnd"] claimConfig
       act <- pletFields @'["keyToRemove"] action
@@ -100,11 +100,10 @@ mkAirdropNodeMP cfg = plam $ \claimConfig redm ctx -> P.do
         perror 
 
 mkAirdropNodeMPW ::
-  Config ->
   ClosedTerm
     ( PAirdropConfig
         :--> PScriptContext :--> PUnit 
     )
-mkAirdropNodeMPW cfg = phoistAcyclic $ plam $ \claimConfig ctx ->
+mkAirdropNodeMPW = phoistAcyclic $ plam $ \claimConfig ctx ->
   let red = punsafeCoerce @_ @_ @PAirdropNodeAction (pto (pfield @"redeemer" # ctx))
-   in mkAirdropNodeMP cfg # claimConfig # red # ctx
+   in mkAirdropNodeMP # claimConfig # red # ctx

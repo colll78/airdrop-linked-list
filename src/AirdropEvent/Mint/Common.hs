@@ -89,13 +89,12 @@ nodeInputUtxoDatumUnsafe = phoistAcyclic $
       pcon (PPair (pfromData outF.value) nodeDat)
 
 parseNodeOutputUtxo ::
-  Config ->
   ClosedTerm
     ( PAsData PCurrencySymbol
         :--> PTxOut
         :--> PPair (PValue 'Sorted 'Positive) (PAsData PAirdropSetNode)
     )
-parseNodeOutputUtxo cfg = phoistAcyclic $
+parseNodeOutputUtxo = phoistAcyclic $
   plam $ \nodeCS out -> P.do
     txOut <- pletFields @'["address", "value", "datum"] out
     value <- plet $ pfromData $ txOut.value
@@ -120,7 +119,6 @@ parseNodeOutputUtxo cfg = phoistAcyclic $
 
 makeCommon ::
   forall {r :: PType} {s :: S}.
-  Config ->
   Term s PScriptContext ->
   TermCont @r
     s
@@ -129,7 +127,7 @@ makeCommon ::
     , Term s (PBuiltinList (PAsData PPubKeyHash))
     , Term s (PInterval PPosixTime)
     )
-makeCommon cfg ctx' = do
+makeCommon ctx' = do
   ------------------------------
   -- Preparing info needed for validation:
   ctx <- tcont $ pletFields @'["txInfo", "scriptInfo"] ctx'
@@ -173,7 +171,7 @@ makeCommon cfg ctx' = do
   nodeOutputs <-
     tcont . plet $
       pmap
-        # (parseNodeOutputUtxo cfg # ownCS)
+        # (parseNodeOutputUtxo # ownCS)
         #$ pconvertLists
         # toNodeValidator
 
@@ -192,8 +190,8 @@ makeCommon cfg ctx' = do
     , vrange
     )
 
-pInit :: forall (s :: S). Config -> PPriceDiscoveryCommon s -> Term s PUnit
-pInit cfg common = P.do
+pInit :: forall (s :: S). PPriceDiscoveryCommon s -> Term s PUnit
+pInit common = P.do
   -- Input Checks
   passert "Init must not spend Nodes" $ pnull # common.nodeInputs
   -- Output Checks:
@@ -234,10 +232,9 @@ pDeinit common = P.do
 
 pInsert ::
   forall (s :: S).
-  Config ->
   PPriceDiscoveryCommon s ->
   Term s (PAsData PByteString :--> PAsData PVestingDatum :--> PUnit)
-pInsert cfg common = plam $ \pkToInsert expectedDatum -> P.do
+pInsert common = plam $ \pkToInsert expectedDatum -> P.do
   keyToInsert <- plet $ pfromData pkToInsert 
   
   -- Input Checks:
