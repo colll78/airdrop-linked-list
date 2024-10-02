@@ -13,6 +13,7 @@ source-repository-package
     type: git
     location: https://github.com/colll78/plutarch-plutus/
     tag: fb94b9775d07e7a8bcd41b8221fc0f2d591629b3
+    sha256: sha256-BcqNHF4LCHwGs+Q+nPKNDOAPZwPvBhKDb7f3s/kkFho=
     subdir:
       .
       plutarch-ledger-api
