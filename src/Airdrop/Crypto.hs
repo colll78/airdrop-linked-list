@@ -22,14 +22,16 @@ import PlutusLedgerApi.Common (serialiseUPLC)
 import Data.ByteString.Short (fromShort)
 import Plutarch.Script (Script(unScript))
 import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
+import Data.Word (Word8)
 
 scriptHashV3 :: Script -> ByteString
-scriptHashV3 = hashScriptWithPrefix "\x03"
+scriptHashV3 = hashScriptWithPrefix 0x3
 
-hashScriptWithPrefix :: ByteString -> Script -> ByteString
+hashScriptWithPrefix :: Word8 -> Script -> ByteString
 hashScriptWithPrefix prefix scr = 
   Hash.blake2b_224
-    $ prefix <> (fromShort . serialiseUPLC . unScript $ scr)
+    $ BS.singleton prefix <> (fromShort . serialiseUPLC . unScript $ scr)
 
 pethereumPubKeyToPubKeyHash :: Term s (PByteString :--> PByteString)
 pethereumPubKeyToPubKeyHash = phoistAcyclic $ plam $ \pubKey -> 

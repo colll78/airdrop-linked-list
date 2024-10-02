@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module AirdropEvent.Mint.Standard (
   mkAirdropNodeMP,
@@ -10,12 +9,9 @@ import Plutarch.LedgerApi.V3
 import Plutarch.LedgerApi.Interval (pafter, pbefore)
 
 --  pRemoveAndDeinit,
-
-import Plutarch.Internal (Config (..))
 import Plutarch.Monadic qualified as P
 import Plutarch.Unsafe (punsafeCoerce)
 import AirdropEvent.Mint.Common (
-  PPriceDiscoveryCommon (mint, ownCS),
   makeCommon,
   pDeinit,
   pInit,

@@ -10,7 +10,6 @@ import PlutusLedgerApi.V1 (TokenName, CurrencySymbol)
 import Airdrop.Utils (pnonew, passert, pisPrefixOf)
 import Plutarch.Builtin (PDataNewtype(..))
 import MerkleTree.MerklePatriciaForestry
-import Plutarch.ByteString
 
 claimRoot :: ClosedTerm PMerklePatriciaForestry
 claimRoot = pfrom_root # phexByteStr "74c61b3b5584c4434f03bc9acbe31d2d2186576e257f1fd85c997916d6df5715"
@@ -21,31 +20,31 @@ totalVestingInstallments = 4
 airdropOperator :: ClosedTerm (PAsData PPubKeyHash)
 airdropOperator = pconstantData "deadbeef"
 
-claimTokenTN :: Term s PTokenName
+claimTokenTN :: ClosedTerm PTokenName
 claimTokenTN =
   let tn :: TokenName
       tn = "FooToken"
    in pconstant tn
 
-claimTokenCS :: Term s PCurrencySymbol
+claimTokenCS :: ClosedTerm PCurrencySymbol
 claimTokenCS =
   let cs :: CurrencySymbol
       cs = "deadbeef"
    in pconstant cs
 
-commitFoldTN :: Term s PTokenName
+commitFoldTN :: ClosedTerm PTokenName
 commitFoldTN =
   let tn :: TokenName
       tn = "CFold"
    in pconstant tn
 
-rewardFoldTN :: Term s PTokenName
+rewardFoldTN :: ClosedTerm PTokenName
 rewardFoldTN =
   let tn :: TokenName
       tn = "RFold"
    in pconstant tn
 
-poriginNodeTN :: Term s PTokenName
+poriginNodeTN :: ClosedTerm PTokenName
 poriginNodeTN =
   let tn :: TokenName
       tn = "FSN"

@@ -14,35 +14,42 @@ import Plutarch.LedgerApi.V1 (
   PCredential (..),
  )
 import Plutarch.LedgerApi.AssocMap qualified as AssocMap
-import Plutarch.LedgerApi.Value (plovelaceValueOf, pnoAdaValue, pvalueOf, pforgetPositive)
+import Plutarch.LedgerApi.Value (pvalueOf, pforgetPositive)
 import Plutarch.LedgerApi.Value qualified as Value 
 import Plutarch.LedgerApi.V2 hiding (PScriptContext)
 import Plutarch.LedgerApi.V3 
-import Plutarch.LedgerApi.Interval (pafter, pbefore)
 import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
-import Airdrop.Utils (pdivCeil, pvalidityRangeStart, pletFieldsSpending, pfromPDatum, passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPrefix, ptryOwnInput, ptryOwnOutput, phasCS, pisFinite, pmustFind, pand'List)
-import Types.Constants (rewardFoldTN, claimTokenCS, claimTokenTN, totalVestingInstallments)
-import Types.AirdropSet (PNodeKey(..), PClaimValidatorConfig (..), PAirdropSetNode (..), PLNodeAction (..), PVestingDatum(..))
+import Airdrop.Utils (pdivCeil, pvalidityRangeStart, pletFieldsSpending, passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPrefix, ptryOwnInput, ptryOwnOutput, phasCS, pand'List)
+import Types.Constants (claimTokenTN, totalVestingInstallments)
+import Scripts.AirdropMP (airdropTokenCS)
+import Types.AirdropSet (PClaimValidatorConfig (..), PAirdropSetNode (..), PLNodeAction (..), PVestingDatum(..))
+import Types.AirdropGlobalLogic (PAirdropGlobalLogicAction(..))
 import Plutarch.Builtin (pforgetData)
 
-pLiquidityGlobalLogicW :: Term s (PAsData PCurrencySymbol :--> PScriptContext :--> PUnit)
-pLiquidityGlobalLogicW = phoistAcyclic $ plam $ \foldCS' ctx -> P.do
-  -- let rewardsIdx = punsafeCoerce @_ @_ @(PAsData PInteger) redeemer
-  ctxF <- pletFields @'["txInfo"] ctx
-  infoF <- pletFields @'["inputs"] ctxF.txInfo
-  foldCS <- plet $ pfromData foldCS'
-  let hasFoldToken = pany @PBuiltinList # plam (\inp -> phasCS # (pfield @"value" # (pfield @"resolved" # inp)) # foldCS) # infoF.inputs 
-  -- let rewardInp = pelemAt @PBuiltinList # pfromData rewardsIdx # infoF.inputs 
-  --     hasFoldToken = pvalueOf # (pfield @"value" # (pfield @"resolved" # rewardInp)) # pfromData rewardCS # rewardFoldTN #== 1
+pisUniqueSet :: Term s (PBuiltinList (PAsData PInteger) :--> PBool)
+pisUniqueSet = phoistAcyclic $ plam $ \xs -> perror  
+
+pAirdropGlobalLogicW :: Term s (PScriptContext :--> PUnit)
+pAirdropGlobalLogicW = phoistAcyclic $ plam $ \foldCS' ctx -> P.do
+  ctxF <- pletFields @'["txInfo", "redeemer"] ctx
+  let redeemer = punsafeCoerce @_ @_ @(PAsData PAirdropGlobalLogicAction) (pto ctxF.redeemer)
+  redF <- pletFields @'["inputIdxs", "outputIdx"] redeemer
+
+  infoF <- pletFields @'["inputs", "outputs", "redeemers"] ctxF.txInfo
+  
+  let checks = 
+        pand'List 
+          [ pconstant True
+          ]
+
   pif hasFoldToken (pconstant ()) perror 
 
 pAirdropSetValidator ::
-  Config ->
   ByteString ->
   ClosedTerm (PClaimValidatorConfig :--> PScriptContext :--> PUnit)
-pAirdropSetValidator cfg prefix = plam $ \claimConfig ctx' -> P.do 
+pAirdropSetValidator prefix = plam $ \claimConfig ctx' -> P.do 
   ctx <- pletFields @'["txInfo", "scriptInfo", "redeemer"] ctx'
   let redeemer = punsafeCoerce @_ @_ @PLNodeAction (pto ctx.redeemer)
   scriptInfoF <- pletFieldsSpending (pforgetData ctx.scriptInfo)
@@ -69,7 +76,7 @@ pAirdropSetValidator cfg prefix = plam $ \claimConfig ctx' -> P.do
     PPartialUnlock _ -> P.do
       claimConfigF <- pletFields @'["vestingPeriodStart", "vestingPeriodEnd"] claimConfig
       PScriptCredential ((pfield @"_0" #) -> ownValHash) <- pmatch (pfield @"credential" # ownInputF.address)
-      let ownOutput = phead @PBuiltinList # info.outputs -- ptryOwnOutput @PBuiltinList # info.outputs # ownValHash
+      let ownOutput = ptryOwnOutput # info.outputs # ownValHash
       ownOutputF <- pletFields @'["value", "datum"] ownOutput
       POutputDatum ((pfield @"outputDatum" #) -> ownOutputDatum) <- pmatch ownOutputF.datum
        
@@ -85,9 +92,9 @@ pAirdropSetValidator cfg prefix = plam $ \claimConfig ctx' -> P.do
           expectedRemainingQty = pdivCeil # (futureInstallments * vestingDatumF.totalVestingQty) # totalVestingInstallments
 
       ownInputVal <- plet $ pforgetPositive ownInputF.value
-      inputVestingTokens <- plet $ pvalueOf # ownInputVal # claimTokenCS # claimTokenTN 
+      inputVestingTokens <- plet $ pvalueOf # ownInputVal # pconstant airdropTokenCS # claimTokenTN 
       let vestingTokenDelta = expectedRemainingQty - inputVestingTokens 
-          claimedTokens = Value.psingleton # claimTokenCS # claimTokenTN # vestingTokenDelta
+          claimedTokens = Value.psingleton # pconstant airdropTokenCS # claimTokenTN # vestingTokenDelta
           checks = 
             pand'List
              [ (pto ownInDat) #== (pto ownOutputDatum)

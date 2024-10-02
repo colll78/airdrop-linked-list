@@ -23,9 +23,10 @@ extra-source-files: CHANGELOG.md
 
 common lang
   ghc-options:
-    -Werror -Wall -Wcompat -Wincomplete-uni-patterns
+    -Werror -Wall -Weverything -Wcompat -Wincomplete-uni-patterns
     -Wno-unused-do-bind -Wno-partial-type-signatures
     -Wmissing-export-lists -Wincomplete-record-updates
+    -Wno-missing-import-lists -Wunused-imports
     -Wmissing-deriving-strategies -Wno-name-shadowing -Wunused-foralls
     -fprint-explicit-foralls -fprint-explicit-kinds -Wunused-do-bind
 
@@ -97,10 +98,10 @@ common lang
 library
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
-    -Wno-partial-type-signatures -Wmissing-export-lists
-    -Wincomplete-record-updates -Wmissing-deriving-strategies
-    -Wno-name-shadowing -Wunused-foralls -fprint-explicit-foralls
-    -fprint-explicit-kinds -fwarn-missing-import-lists
+    -Wno-partial-type-signatures -Wno-missing-import-lists
+    -Wmissing-export-lists -Wincomplete-record-updates
+    -Wmissing-deriving-strategies -Wno-name-shadowing -Wunused-foralls
+    -fprint-explicit-foralls -fprint-explicit-kinds -Wunused-imports
 
   default-extensions:
     BangPatterns
@@ -169,13 +170,16 @@ library
   exposed-modules:
     Airdrop.Crypto
     Airdrop.Utils
+    AirdropEvent.Mint.AirdropToken
     AirdropEvent.Mint.Common
     AirdropEvent.Mint.Standard
     AirdropEvent.Validator
     MerkleTree.Helpers
     MerkleTree.MerklePatriciaForestry
     MerkleTree.Merkling
+    Scripts.AirdropMP
     Scripts.NodeMP
+    Types.AirdropGlobalLogic
     Types.AirdropSet
     Types.Classes
     Types.Constants

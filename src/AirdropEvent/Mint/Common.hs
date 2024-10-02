@@ -9,43 +9,32 @@ module AirdropEvent.Mint.Common (
 
 import Plutarch.LedgerApi.Value (plovelaceValueOf, pnormalize, pvalueOf)
 import Plutarch.LedgerApi.AssocMap qualified as AssocMap
-import Plutarch.LedgerApi.Interval (pafter, pbefore)
-import Plutarch.TermCont (pguardC)
-import Plutarch.Internal (Config (..))
+-- import Plutarch.LedgerApi.Interval (pafter, pbefore)
+-- import Plutarch.TermCont (pguardC)
 import Plutarch.List (pconvertLists)
 import Plutarch.Monadic qualified as P
-import Plutarch.Positive (PPositive)
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
-import PlutusLedgerApi.V2 (CurrencySymbol)
 import Airdrop.Utils (
   pand'List,
   passert,
   paysToAddress,
-  paysToCredential,
   pcheck,
   pcountOfUniqueTokens,
   pfindWithRest,
   pfindCurrencySymbolsByTokenPrefix,
   pheadSingleton,
-  phasCS,
   phasDataCS,
-  pmapMaybe,
-  pmustFind,
   psingletonOfCS,
-  pvalueOfOne,
-  (#>),
   (#>=),
   pfromPDatum, 
   ptryFromInlineDatum,
-  pnonew,
   pmapFilter,
  )
-import Types.Constants (minAda, nodeDepositAda, minAdaToCommit, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
+import Types.Constants (minAdaToCommit, pnodeKeyTN, poriginNodeTN, pparseNodeKey)
 import Types.AirdropSet
 import Plutarch.LedgerApi.V3 
-import Plutarch.Builtin (PDataNewtype(..), pforgetData)
-import Airdrop.Crypto
+import Plutarch.Builtin (pforgetData)
 
 {- | Ensures that the minted amount of the FinSet CS is exactly the specified
      tokenName and amount

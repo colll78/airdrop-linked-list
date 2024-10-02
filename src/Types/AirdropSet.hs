@@ -13,15 +13,13 @@ import Plutarch.DataRepr (
  )
 import Plutarch.Lift (PConstantDecl, PUnsafeLiftDecl (PLifted))
 import Plutarch.Monadic qualified as P
-import GHC.Generics (Generic)
 import Plutarch.Prelude
-import PlutusLedgerApi.V2 (BuiltinByteString, PubKeyHash, TokenName, CurrencySymbol, Address, POSIXTime)
+import PlutusLedgerApi.V2 (BuiltinByteString, Address, POSIXTime)
 import PlutusLedgerApi.V3 (TxOutRef)
 import PlutusTx qualified
 import Types.Classes 
 import Plutarch.Unsafe (punsafeCoerce)
 import Plutarch.Builtin (PDataNewtype (PDataNewtype), pforgetData)
-import Plutarch.Bool (pand')
 import MerkleTree.MerklePatriciaForestry (PMerklePatriciaForestry (..), PProof(..), MerklePatriciaForestry)
 import Airdrop.Utils (pcond, pand'List)
 import Plutarch.Internal.PlutusType (pcon', pmatch')
@@ -65,32 +63,11 @@ instance ScottConvertible PNodeKey where
   fromScott nodeKeyScott = pmatch nodeKeyScott $ \case
     PKeyScott bs -> pcon (PKey (pdcons # pdata bs # pdnil))
     PEmptyScott -> pcon (PEmpty pdnil)
-
-
-data PProxyTokenHolderDatum (s :: S)
-  = PProxyTokenHolderDatum
-      ( Term
-          s
-          ( PDataRecord
-              '[ "totalCommitted" ':= PInteger 
-               , "returnAddress" ':= PAddress
-               ]
-          )
-      )
-  deriving stock (Generic)
-  deriving anyclass (PlutusType, PIsData, PDataFields)
-
-instance DerivePlutusType PProxyTokenHolderDatum where
-  type DPTStrat _ = PlutusTypeData
-
-deriving anyclass instance
-  PTryFrom PData PProxyTokenHolderDatum
   
 
 data LNodeAction
   = LLinkedListAct
   | PartialUnlock
-  | FullUnlock
   deriving stock (Generic, Show)
 
 PlutusTx.unstableMakeIsData ''LNodeAction

@@ -8,7 +8,6 @@ import Plutarch.LedgerApi.Value (padaSymbol, pvalueOf, pnormalize)
 import Plutarch.LedgerApi.AssocMap qualified as AssocMap
 --import Plutarch.LedgerApi.V2 
 import Plutarch.LedgerApi.V3 
-
 import Plutarch.Bool (pand')
 import Plutarch.TermCont 
 import Plutarch.Monadic qualified as P
@@ -17,7 +16,6 @@ import qualified Plutarch.LedgerApi.Value as Value
 import Plutarch.Internal
 import Plutarch.Builtin
 import Plutarch.Num
-import Plutarch.LedgerApi.Interval (PInterval(..))
 import Plutarch.DataRepr.Internal.Field
     ( HRec(..), Labeled(Labeled) )  
 
@@ -29,7 +27,7 @@ type PScriptInfoHRec (s :: S) =
      , '("_1", Term s (PAsData (PMaybeData PDatum)))
      ]
 
-pletFieldsSpending ::  forall {s :: S} {r :: PType}. Term s PData -> (PScriptInfoHRec s -> Term s r) -> Term s r 
+pletFieldsSpending :: forall {s :: S} {r :: PType}. Term s PData -> (PScriptInfoHRec s -> Term s r) -> Term s r 
 pletFieldsSpending term = runTermCont $ do
   constrPair <- tcont $ plet $ pasConstr # term
   fields <- tcont $ plet $ psndBuiltin # constrPair
@@ -38,6 +36,24 @@ pletFieldsSpending term = runTermCont $ do
       datum = punsafeCoerce @_ @_ @(PAsData (PMaybeData PDatum)) $ phead # (ptail # checkedFields)
   tcont $ \f -> f $ HCons (Labeled @"_0" outRef) (HCons (Labeled @"_1" datum) HNil)
 
+{- | Count the number of spend plutus scripts executed in the transaction via the txInfoRedeemers list.
+  Assumes that the txInfoRedeemers list is sorted according to the ledger Ord instance for PlutusPurpose:
+  `deriving instance Ord (ConwayPlutusPurpose AsIx era)`
+https://github.com/IntersectMBO/cardano-ledger/blob/d79d41e09da6ab93067acddf624d1a540a3e4e8d/eras/conway/impl/src/Cardano/Ledger/Conway/Scripts.hs#L188
+-}
+pcountSpendRedeemers :: forall {s :: S}. Term s (AssocMap.PMap 'AssocMap.Unsorted PScriptPurpose PRedeemer) -> Term s PInteger
+pcountSpendRedeemers rdmrs =
+    let go :: Term _ (PInteger :--> PBuiltinList (PBuiltinPair (PAsData PScriptPurpose) (PAsData PRedeemer)) :--> PInteger)
+        go = pfix #$ plam $ \self n -> 
+              pelimList 
+                (\x xs -> 
+                  let constrPair :: Term s (PAsData PScriptPurpose)
+                      constrPair = pfstBuiltin # x
+                      constrIdx = pfstBuiltin # (pasConstr # (pforgetData constrPair))
+                  in pif (constrIdx #== 1) (self # (n + 1) # xs) n 
+                )
+                n
+     in go # 0 # pto rdmrs
 
 ptryFromInlineDatum :: forall (s :: S). Term s (POutputDatum :--> PDatum)
 ptryFromInlineDatum = phoistAcyclic $
@@ -196,8 +212,6 @@ pmapFilter =
         )
         (const pnil)
 
-
-
 -- | Checks if a Currency Symbol is held within a Value
 phasDataCS ::
   forall
@@ -293,6 +307,32 @@ pelemAtFlipped' = phoistAcyclic $
       (phead # xs)
       (self # (ptail # xs) # (n - 1))
 
+pelemAtFast :: (PIsListLike list a) => Term s (list a :--> PInteger :--> a)
+pelemAtFast = phoistAcyclic $
+  pfix #$ plam $ \self xs n ->
+    pif
+      (10 #< n)
+      ( self
+          # ( ptail
+                #$ ptail
+                #$ ptail
+                #$ ptail
+                #$ ptail
+                #$ ptail
+                #$ ptail
+                #$ ptail
+                #$ ptail
+                #$ ptail
+                # xs
+            )
+          # (n - 10)
+      )
+      ( pif
+          (5 #< n)
+          (self # (ptail #$ ptail #$ ptail #$ ptail #$ ptail # xs) # (n - 5))
+          (pelemAtFlipped' # xs # n)
+      )
+
 pmapMaybe ::
   forall (list :: PType -> PType) (a :: PType) (b :: PType).
   PListLike list =>
@@ -331,7 +371,7 @@ ptryOutputToAddress = phoistAcyclic $
     )
       # outs
 
-ptryOwnOutput :: (PIsListLike list PTxOut) => Term s (list PTxOut :--> PScriptHash :--> PTxOut)
+ptryOwnOutput :: Term s (PBuiltinList (PAsData PTxOut) :--> PScriptHash :--> PTxOut)
 ptryOwnOutput = phoistAcyclic $
   plam $ \outs target ->
     ( pfix #$ plam $ \self xs ->
@@ -340,7 +380,7 @@ ptryOwnOutput = phoistAcyclic $
               pmatch (pfield @"credential" # (pfield @"address" # txo)) $ \case
                 PPubKeyCredential _ -> (self # txos)
                 PScriptCredential ((pfield @"_0" #) -> vh) ->
-                  pif (target #== vh) txo (self # txos)
+                  pif (target #== vh) (pfromData txo) (self # txos)
           )
           perror
           xs
@@ -788,3 +828,4 @@ pdivCeil :: (PIntegral a, PNum a) => Term s (a :--> a :--> a)
 pdivCeil = phoistAcyclic $
   plam $
     \x y -> 1 + pdiv # (x - 1) # y
+
