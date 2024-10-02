@@ -2,10 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module AirdropEvent.Validator (
-  pAirdropSetValidator,
-  pLiquidityGlobalLogicW
-) where
+module AirdropEvent.Validator where 
 
 import Data.ByteString (ByteString)
 
@@ -28,11 +25,24 @@ import Types.AirdropSet (PClaimValidatorConfig (..), PAirdropSetNode (..), PLNod
 import Types.AirdropGlobalLogic (PAirdropGlobalLogicAction(..))
 import Plutarch.Builtin (pforgetData)
 
+tenBools :: Term s (PBuiltinList (PAsData PBool))
+tenBools = foldr (\h t -> pcons # pconstantData h # t) pnil (replicate 10 True)
+
 pisUniqueSet :: Term s (PBuiltinList (PAsData PInteger) :--> PBool)
 pisUniqueSet = phoistAcyclic $ plam $ \xs -> perror  
 
+pbuiltinListLength :: forall a s. Term s (PBuiltinList a :--> PInteger)
+pbuiltinListLength = phoistAcyclic $ plam $ \xs ->
+  pfix #$ plam $ \self acc l ->
+    pelimList 
+      (\_ ys -> self # (acc + 1) # ys)  -- cons case
+      acc                               -- nil case
+      l
+    # 0
+    # xs 
+
 pAirdropGlobalLogicW :: Term s (PScriptContext :--> PUnit)
-pAirdropGlobalLogicW = phoistAcyclic $ plam $ \foldCS' ctx -> P.do
+pAirdropGlobalLogicW = phoistAcyclic $ plam $ \ctx -> P.do
   ctxF <- pletFields @'["txInfo", "redeemer"] ctx
   let redeemer = punsafeCoerce @_ @_ @(PAsData PAirdropGlobalLogicAction) (pto ctxF.redeemer)
   redF <- pletFields @'["inputIdxs", "outputIdx"] redeemer
@@ -44,7 +54,7 @@ pAirdropGlobalLogicW = phoistAcyclic $ plam $ \foldCS' ctx -> P.do
           [ pconstant True
           ]
 
-  pif hasFoldToken (pconstant ()) perror 
+  pif checks (pconstant ()) perror 
 
 pAirdropSetValidator ::
   ByteString ->
