@@ -30,8 +30,7 @@ common lang
     -Wmissing-deriving-strategies -Wno-name-shadowing -Wunused-foralls
     -fprint-explicit-foralls -fprint-explicit-kinds -Wunused-do-bind
     -Wno-unused-do-bind -Wno-missing-kind-signatures
-    -Wno-implicit-prelude
-    -Wno-unsafe -Wno-missing-safe-haskell-mode
+    -Wno-implicit-prelude -Wno-unsafe -Wno-missing-safe-haskell-mode
     -Wno-missing-local-signatures -Wno-prepositive-qualified-module
     -Wno-missing-import-lists -Wno-monomorphism-restriction
     -Wno-missed-specialisations -Wno-all-missed-specializations
@@ -113,13 +112,14 @@ library
     -Wno-partial-type-signatures -Wno-missing-import-lists
     -Wmissing-export-lists -Wincomplete-record-updates
     -Wmissing-deriving-strategies -Wno-name-shadowing -Wunused-foralls
-    -Wno-unused-packages -Wno-missing-local-signatures -Wno-implicit-prelude
-    -fprint-explicit-foralls -fprint-explicit-kinds -Wunused-imports
+    -Wno-unused-packages -Wno-missing-local-signatures
+    -Wno-implicit-prelude -fprint-explicit-foralls
+    -fprint-explicit-kinds -Wunused-imports
     -Wno-missing-safe-haskell-mode -Wno-missing-kind-signatures
-    -Wno-operator-whitespace -Wno-unsafe -Wno-prepositive-qualified-module
-    -Wno-partial-fields -Wno-monomorphism-restriction
-    -Wno-missed-specialisations -Wno-all-missed-specializations
-    -Wno-unused-packages
+    -Wno-operator-whitespace -Wno-unsafe
+    -Wno-prepositive-qualified-module -Wno-partial-fields
+    -Wno-monomorphism-restriction -Wno-missed-specialisations
+    -Wno-all-missed-specializations -Wno-unused-packages
 
   default-extensions:
     BangPatterns
@@ -196,13 +196,13 @@ library
     MerkleTree.Helpers
     MerkleTree.MerklePatriciaForestry
     MerkleTree.Merkling
+    Profile
     Scripts.AirdropMP
     Scripts.NodeMP
     Types.AirdropGlobalLogic
     Types.AirdropSet
     Types.Classes
     Types.Constants
-    Profile
 
   -- Compile
 
