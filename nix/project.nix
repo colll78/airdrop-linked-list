@@ -3,7 +3,7 @@
 let
   sha256map = {
     "https://github.com/j-mueller/sc-tools"."e1f4359b6fb6a2b939bac0840e229193dd4f6b54" = "sha256-+dVtHGOQHvAjwOZZ0ZyHsQLF2roREUVIoMU31AD3YZs=";
-    "https://github.com/colll78/plutarch-plutus"."fb94b9775d07e7a8bcd41b8221fc0f2d591629b3" = "dd0c822be38ec781ea704a5a431aed2668c3d07aa8901c4e8fb824a4f701cff3";
+    "https://github.com/colll78/plutarch-plutus"."548cb641378b4c00bc02abfdcd723821b08141f5" = "sha256-JdQ0wlktqMqH5kcIu3gUsR65Ulg7YmttL/1CM9UjHhs=";
   };
 
   modules = [{ }];

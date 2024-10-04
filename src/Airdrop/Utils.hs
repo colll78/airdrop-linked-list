@@ -199,7 +199,7 @@ pfindCurrencySymbolsByTokenName = phoistAcyclic $
        in pmap # pfstBuiltin # hasTn
 
 pmapFilter :: 
-  (PIsListLike list a, PElemConstraint list a, PElemConstraint list b) => Term s ((b :--> PBool) :--> (a :--> b) :-->  list a :--> list b)
+  (PIsListLike list a, PElemConstraint list b) => Term s ((b :--> PBool) :--> (a :--> b) :-->  list a :--> list b)
 pmapFilter =
   phoistAcyclic $
     plam $ \predicate f ->
@@ -273,14 +273,14 @@ paysValueToAddress ::
   Term s (PValue 'Sorted 'Positive :--> PAddress :--> PTxOut :--> PBool)
 paysValueToAddress = phoistAcyclic $
   plam $ \val adr txOut ->
-    pletFields @["address", "value"] txOut $ \txoFields ->
+    pletFields @'["address", "value"] txOut $ \txoFields ->
       txoFields.address #== adr #&& txoFields.value #== val
 
 paysAtleastValueToAddress ::
   Term s (PValue 'Sorted 'Positive :--> PAddress :--> PTxOut :--> PBool)
 paysAtleastValueToAddress = phoistAcyclic $
   plam $ \val adr txOut ->
-    pletFields @["address", "value"] txOut $ \txoFields ->
+    pletFields @'["address", "value"] txOut $ \txoFields ->
       txoFields.address #== adr #&& txoFields.value #<= val
 
 paysToCredential :: Term s (PScriptHash :--> PTxOut :--> PBool)
@@ -408,65 +408,6 @@ pheadSingleton = phoistAcyclic $
 ptxSignedByPkh ::
   Term s (PAsData PPubKeyHash :--> PBuiltinList (PAsData PPubKeyHash) :--> PBool)
 ptxSignedByPkh = pelem
-
--- psymbolValueOfHelper ::
---   forall
---     (keys :: KeyGuarantees)
---     (amounts :: AmountGuarantees)
---     (s :: S).
---   Term
---     s
---     ( (PInteger :--> PBool)
---         :--> PCurrencySymbol
---         :--> ( PValue keys amounts
---                 :--> PInteger
---              )
---     )
--- psymbolValueOfHelper =
---   phoistAcyclic $
---     plam $ \cond sym value'' -> unTermCont $ do
---       PValue value' <- pmatchC value''
---       PMap value <- pmatchC value'
---       m' <-
---         tcexpectJust
---           0
---           ( plookupAssoc
---               # pfstBuiltin
---               # psndBuiltin
---               # pdata sym
---               # value
---           )
---       PMap m <- pmatchC (pfromData m')
---       pure $
---         pfoldr
---           # plam
---             ( \x v ->
---                 plet (pfromData $ psndBuiltin # x) $ \q ->
---                   pif
---                     (cond # q)
---                     (q + v)
---                     v
---             )
---           # 0
---           # m
-
--- -- | Sum of total positive amounts in Value for a given policyId
--- ppositiveSymbolValueOf ::
---   forall
---     (keys :: KeyGuarantees)
---     (amounts :: AmountGuarantees)
---     (s :: S).
---   Term s (PCurrencySymbol :--> (PValue keys amounts :--> PInteger))
--- ppositiveSymbolValueOf = phoistAcyclic $ psymbolValueOfHelper #$ plam (0 #<)
-
--- -- | Sum of total negative amounts in Value for a given policyId
--- pnegativeSymbolValueOf ::
---   forall
---     (keys :: KeyGuarantees)
---     (amounts :: AmountGuarantees)
---     (s :: S).
---   Term s (PCurrencySymbol :--> (PValue keys amounts :--> PInteger))
--- pnegativeSymbolValueOf = phoistAcyclic $ psymbolValueOfHelper #$ plam (#< 0)
 
 -- | Probably more effective than `plength . pflattenValue`
 pcountOfUniqueTokens ::
@@ -829,3 +770,5 @@ pdivCeil = phoistAcyclic $
   plam $
     \x y -> 1 + pdiv # (x - 1) # y
 
+pisScriptCredential :: Term s (PAsData PCredential) -> Term s PBool 
+pisScriptCredential cred = ((pfstBuiltin # (pasConstr # (pforgetData cred))) #== 1)

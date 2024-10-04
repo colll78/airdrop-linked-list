@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
+{-# OPTIONS_GHC -Wno-partial-fields #-}
 {-# LANGUAGE TemplateHaskell #-}
 module MerkleTree.MerklePatriciaForestry where
 

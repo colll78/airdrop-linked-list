@@ -40,6 +40,7 @@ import Data.Char (toLower)
 import PlutusLedgerApi.V2 (BuiltinByteString)
 import PlutusTx.Prelude qualified as P
 import qualified Data.ByteString as BS
+
 encodeSerialiseCBOR :: Script -> Text
 encodeSerialiseCBOR = Text.decodeUtf8 . Base16.encode . CBOR.serialize' . serialiseScript
 

@@ -98,8 +98,7 @@ data PClaimValidatorConfig (s :: S)
           s
           ( PDataRecord
               '[ "discoveryDeadline" ':= PPosixTime
-               , "commitCred" ':= PStakingCredential
-               , "rewardCred" ':= PStakingCredential
+               , "globalCred" ':= PCredential
                , "vestingPeriodStart" ':= PInteger 
                , "vestingPeriodEnd" ':= PInteger 
                ]

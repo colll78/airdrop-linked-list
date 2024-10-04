@@ -1,8 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
+
 
 module Types.AirdropGlobalLogic where 
 
-import Plutarch.LedgerApi.V3
 import Plutarch.DataRepr (
   DerivePConstantViaData (DerivePConstantViaData),
   PDataFields,
@@ -14,7 +15,8 @@ import PlutusTx qualified
 
 data AirdropGlobalLogicAction = AirdropGlobalLogicAction
   { inputsIdxs :: [Integer]
-  , outputIdxs :: [Integer]
+  , outputIdx :: Integer
+  , numProcessed :: Integer 
   }
   deriving stock (Generic, Show)
 
@@ -26,7 +28,8 @@ data PAirdropGlobalLogicAction (s :: S)
           s
           ( PDataRecord
               '[ "inputIdxs" ':= PBuiltinList (PAsData PInteger) 
-               , "outputIdx" ':= (PAsData PInteger) 
+               , "outputIdx" ':= PInteger
+               , "numProcessed" ':= PInteger
                ]
           )
       )
@@ -47,3 +50,20 @@ deriving via
 
 instance PTryFrom PData (PAsData PAirdropGlobalLogicAction)
 instance PTryFrom PData PAirdropGlobalLogicAction
+
+data PAirdropGlobalLogicConfig (s :: S)
+  = PAirdropGlobalLogicConfig
+      ( Term
+          s
+          ( PDataRecord
+              '[ "vestingPeriodStart" ':= PInteger
+               , "vestingPeriodEnd" ':= PInteger
+               , "timeBetweenInstallments" ':= PInteger
+               ]
+          )
+      )
+  deriving stock (Generic)
+  deriving anyclass (PlutusType, PIsData, PDataFields)
+
+instance DerivePlutusType PAirdropGlobalLogicConfig where
+  type DPTStrat _ = PlutusTypeData

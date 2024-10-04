@@ -29,6 +29,16 @@ common lang
     -Wno-missing-import-lists -Wunused-imports
     -Wmissing-deriving-strategies -Wno-name-shadowing -Wunused-foralls
     -fprint-explicit-foralls -fprint-explicit-kinds -Wunused-do-bind
+    -Wno-unused-do-bind -Wno-missing-kind-signatures
+    -Wno-implicit-prelude
+    -Wno-unsafe -Wno-missing-safe-haskell-mode
+    -Wno-missing-local-signatures -Wno-prepositive-qualified-module
+    -Wno-missing-import-lists -Wno-monomorphism-restriction
+    -Wno-missed-specialisations -Wno-all-missed-specializations
+    -Wno-unrecognised-warning-flags -Wno-unrecognised-pragmas
+    -Wno-operator-whitespace -fprint-equality-relations
+    -fprint-explicit-kinds -fprint-explicit-foralls
+    -Wno-unused-packages
 
   default-extensions:
     BangPatterns
@@ -68,6 +78,7 @@ common lang
     NamedFieldPuns
     NamedWildCards
     NoFieldSelectors
+    NoMonomorphismRestriction
     NoStarIsType
     NumericUnderscores
     OverloadedLabels
@@ -96,12 +107,19 @@ common lang
   default-language:   GHC2021
 
 library
+  -- import:         lang
   ghc-options:
     -Wall -Wcompat -Wincomplete-uni-patterns -Wno-unused-do-bind
     -Wno-partial-type-signatures -Wno-missing-import-lists
     -Wmissing-export-lists -Wincomplete-record-updates
     -Wmissing-deriving-strategies -Wno-name-shadowing -Wunused-foralls
+    -Wno-unused-packages -Wno-missing-local-signatures -Wno-implicit-prelude
     -fprint-explicit-foralls -fprint-explicit-kinds -Wunused-imports
+    -Wno-missing-safe-haskell-mode -Wno-missing-kind-signatures
+    -Wno-operator-whitespace -Wno-unsafe -Wno-prepositive-qualified-module
+    -Wno-partial-fields -Wno-monomorphism-restriction
+    -Wno-missed-specialisations -Wno-all-missed-specializations
+    -Wno-unused-packages
 
   default-extensions:
     BangPatterns
@@ -166,9 +184,10 @@ library
     UndecidableInstances
     ViewPatterns
 
-  import:             lang
   exposed-modules:
     Airdrop.Crypto
+    Airdrop.List
+    Airdrop.PlutusDataList
     Airdrop.Utils
     AirdropEvent.Mint.AirdropToken
     AirdropEvent.Mint.Common
@@ -183,6 +202,7 @@ library
     Types.AirdropSet
     Types.Classes
     Types.Constants
+    Profile
 
   -- Compile
 
@@ -193,6 +213,7 @@ library
     , bytestring
     , cardano-binary
     , data-default
+    , generics-sop
     , plutarch
     , plutarch-extra
     , plutarch-ledger-api

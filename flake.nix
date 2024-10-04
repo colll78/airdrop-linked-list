@@ -31,8 +31,7 @@
     };
 
     plutarch = {
-      url = "github:colll78/plutarch-plutus?ref=staging";
-      flake = false;
+      url = "github:colll78/plutarch-plutus/548cb641378b4c00bc02abfdcd723821b08141f5";
     };
   };
 
