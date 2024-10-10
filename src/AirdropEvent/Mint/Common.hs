@@ -19,7 +19,6 @@ import Airdrop.Utils (
   pand'List,
   passert,
   paysToAddress,
-  pcheck,
   pcountOfUniqueTokens,
   pfindWithRest,
   pfindCurrencySymbolsByTokenPrefix,
@@ -53,19 +52,19 @@ correctNodeTokenMinted = phoistAcyclic $
     let tokenMap = AssocMap.psingleton # tokenName # amount
     tokenMap #== nodeMint
 
-nodeInputUtxoDatum ::
-  ClosedTerm
-    ( PAsData PCurrencySymbol
-        :--> PTxOut
-        :--> PMaybe (PAsData PAirdropSetNode)
-    )
-nodeInputUtxoDatum = phoistAcyclic $
-  plam $ \nodeCS out -> P.do
-    txOut <- pletFields @'["datum", "value"] out
-    let value = pfromData txOut.value
-    pcheck (phasDataCS # nodeCS # value) $
-      punsafeCoerce $
-        ptryFromInlineDatum # txOut.datum
+-- nodeInputUtxoDatum ::
+--   ClosedTerm
+--     ( PAsData PCurrencySymbol
+--         :--> PTxOut
+--         :--> PMaybe (PAsData PAirdropSetNode)
+--     )
+-- nodeInputUtxoDatum = phoistAcyclic $
+--   plam $ \nodeCS out -> P.do
+--     txOut <- pletFields @'["datum", "value"] out
+--     let value = pfromData txOut.value
+--     pcheck (phasDataCS # nodeCS # value) $
+--       punsafeCoerce $
+--         ptryFromInlineDatum # txOut.datum
 
 nodeInputUtxoDatumUnsafe ::
   ClosedTerm

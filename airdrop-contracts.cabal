@@ -76,7 +76,6 @@ common lang
     MultiParamTypeClasses
     NamedFieldPuns
     NamedWildCards
-    NoFieldSelectors
     NoMonomorphismRestriction
     NoStarIsType
     NumericUnderscores
@@ -158,7 +157,6 @@ library
     MultiParamTypeClasses
     NamedFieldPuns
     NamedWildCards
-    NoFieldSelectors
     NoStarIsType
     NumericUnderscores
     OverloadedLabels
@@ -271,16 +269,29 @@ test-suite helpers-tests
   hs-source-dirs:   src src/Testing
   other-modules:
     Airdrop.Crypto
+    Airdrop.List
     Airdrop.Utils
+    AirdropEvent.Mint.AirdropToken
+    AirdropEvent.Mint.Common
+    AirdropEvent.Mint.Standard
+    AirdropEvent.Validator
     MerkleTree.Helpers
     MerkleTree.MerklePatriciaForestry
     MerkleTree.Merkling
+    Scripts.AirdropMP
+    Scripts.NodeMP
+    Testing.AirdropValidator
     Testing.Crypto
     Testing.Eval
     Testing.MerklePatriciaForestry
+    Types.AirdropGlobalLogic
+    Types.AirdropSet
+    Types.Classes
+    Types.Constants
 
   build-depends:
     , cardano-crypto-class
+    , prettyprinter
     , tasty
     , tasty-hunit
     , tasty-quickcheck

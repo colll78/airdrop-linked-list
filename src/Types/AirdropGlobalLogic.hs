@@ -51,6 +51,15 @@ deriving via
 instance PTryFrom PData (PAsData PAirdropGlobalLogicAction)
 instance PTryFrom PData PAirdropGlobalLogicAction
 
+data AirdropGlobalLogicConfig = AirdropGlobalLogicConfig
+  { vestingPeriodStart :: Integer
+  , vestingPeriodEnd :: Integer
+  , timeBetweenInstallments :: Integer 
+  }
+  deriving stock (Generic, Show)
+
+PlutusTx.unstableMakeIsData ''AirdropGlobalLogicConfig
+
 data PAirdropGlobalLogicConfig (s :: S)
   = PAirdropGlobalLogicConfig
       ( Term
@@ -67,3 +76,11 @@ data PAirdropGlobalLogicConfig (s :: S)
 
 instance DerivePlutusType PAirdropGlobalLogicConfig where
   type DPTStrat _ = PlutusTypeData
+
+instance PUnsafeLiftDecl PAirdropGlobalLogicConfig where
+  type PLifted PAirdropGlobalLogicConfig = AirdropGlobalLogicConfig
+
+deriving via
+  (DerivePConstantViaData AirdropGlobalLogicConfig PAirdropGlobalLogicConfig)
+  instance
+    (PConstantDecl AirdropGlobalLogicConfig)

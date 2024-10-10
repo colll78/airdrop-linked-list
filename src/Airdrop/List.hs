@@ -128,7 +128,7 @@ pbuiltinListLength acc =
   )
   # acc
 
-pbuiltinListLengthFast :: (PElemConstraint PBuiltinList a, PIsData a) => Term s (PInteger :--> PBuiltinList a :--> PInteger)
+pbuiltinListLengthFast :: (PElemConstraint PBuiltinList a) => Term s (PInteger :--> PBuiltinList a :--> PInteger)
 pbuiltinListLengthFast = phoistAcyclic $ plam $ \n xs ->
   pcond 
     [ ((30 #<= n), ((pbuiltinListLength 30) # (nTails 30 xs)))

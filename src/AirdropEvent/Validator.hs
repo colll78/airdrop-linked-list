@@ -15,7 +15,7 @@ import Plutarch.Monadic qualified as P
 import Plutarch.Prelude
 import Plutarch.Unsafe (punsafeCoerce)
 import Airdrop.List (penforceNSpendRedeemers, pdropFast)
-import Airdrop.Utils (pelemAtFast, pisScriptCredential, pdivCeil, pvalidityRangeStart, pletFieldsSpending, passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPrefix, ptryOwnInput, ptryOwnOutput, phasCS, pand'List)
+import Airdrop.Utils (pelemAtFast, pisScriptCredential, pdivCeil, pvalidityRangeStart, pletFieldsSpending, passert, pcontainsCurrencySymbols, pfindCurrencySymbolsByTokenPrefix, ptryOwnInput, pand'List)
 import Types.Constants (claimTokenTN, totalVestingInstallments)
 import Scripts.AirdropMP (airdropTokenCS)
 import Types.AirdropSet (PClaimValidatorConfig (..), PAirdropSetNode (..), PLNodeAction (..), PVestingDatum(..))
@@ -50,15 +50,18 @@ pprocessVestingPosition expectedAddress futureInstallments vestingInput vestingO
   vestingDatumF <- pletFields @'["beneficiary", "totalVestingQty"] (punsafeCoerce @_ @_ @PVestingDatum setNodeDatumF.extraData)
   let expectedRemainingQty = pdivCeil # (futureInstallments * vestingDatumF.totalVestingQty) # totalVestingInstallments
   vestingInVal <- plet $ pforgetPositive vestingInF.value
-  inputVestingTokens <- plet $ pvalueOf # vestingInVal # pconstant airdropTokenCS # claimTokenTN
+  inputVestingTokens <- plet $ pvalueOf # vestingInVal # pairdropCS # claimTokenTN
   let vestingTokenDelta = expectedRemainingQty - inputVestingTokens 
-      claimedTokens = Value.psingleton # pconstant airdropTokenCS # claimTokenTN # vestingTokenDelta
+      claimedTokens = Value.psingleton # pairdropCS # claimTokenTN # vestingTokenDelta
+
   pand'List 
     [ setNodeInDatum' #== vestingOutF.datum
     , (vestingInVal <> claimedTokens) #== pforgetPositive vestingOutF.value
     , vestingInF.address #== expectedAddress
     ]
 
+pairdropCS :: ClosedTerm PCurrencySymbol
+pairdropCS = pconstant airdropTokenCS
 
 pAirdropGlobalLogicW :: Term s (PAirdropGlobalLogicConfig :--> PScriptContext :--> PUnit)
 pAirdropGlobalLogicW = phoistAcyclic $ plam $ \glConfig ctx -> P.do
@@ -71,7 +74,7 @@ pAirdropGlobalLogicW = phoistAcyclic $ plam $ \glConfig ctx -> P.do
   inputsElemAt <- plet $ ((pelemAtFast # infoF.inputs) :: Term _ (PInteger :--> (PAsData PTxInInfo))) 
   let vestingInputs = pmap @PBuiltinList # plam (\i -> pfield @"resolved" # (inputsElemAt # pfromData i)) # redF.inputIdxs
       vestingOutputs = pdropFast # (pfromData redF.outputIdx) # infoF.outputs
-  
+
   cfgF <- pletFields @'["vestingPeriodStart", "vestingPeriodEnd", "timeBetweenInstallments"] glConfig
   vestingEnd <- plet $ pfromData cfgF.vestingPeriodEnd 
   let currentTimeApproximation = pfromData $ pvalidityRangeStart # infoF.validRange
@@ -79,10 +82,9 @@ pAirdropGlobalLogicW = phoistAcyclic $ plam $ \glConfig ctx -> P.do
   futureInstallments <- plet $ pdivCeil # vestingTimeRemaining # pfromData cfgF.timeBetweenInstallments
 
   vestingAddress <- plet $ pfield @"address" # (phead # vestingInputs)
-  
+
   let vestingFirstCredential = pfield @"credential" # vestingAddress
       processFunc = pprocessVestingPosition vestingAddress futureInstallments
-  --expectedRemainingQty = pdivCeil # (futureInstallments * vestingDatumF.totalVestingQty) # totalVestingInstallments
       processResult = (pfoldUTxOs processFunc) # vestingInputs # vestingOutputs
 
   let checks = 
@@ -128,35 +130,5 @@ pAirdropSetValidator prefix = plam $ \claimConfig ctx' -> P.do
         (pcontainsCurrencySymbols # pfromData info.mint # potentialNodeCSs)
       (pconstant ())
 
-      -- claimConfigF <- pletFields @'["vestingPeriodStart", "vestingPeriodEnd"] claimConfig
-      -- PScriptCredential ((pfield @"_0" #) -> ownValHash) <- pmatch (pfield @"credential" # ownInputF.address)
-      -- let ownOutput = ptryOwnOutput # info.outputs # ownValHash
-      -- ownOutputF <- pletFields @'["value", "datum"] ownOutput
-      -- POutputDatum ((pfield @"outputDatum" #) -> ownOutputDatum) <- pmatch ownOutputF.datum
-       
-      -- PDJust ((pfield @"_0" #) -> ownInDat) <- pmatch scriptInfoF._1
-      -- ownInputDatumF <- pletFields @'["extraData"] (punsafeCoerce @_ @_ @PAirdropSetNode (pto ownInDat))
-      -- vestingDatumF <- pletFields @'["beneficiary", "totalVestingQty"] (punsafeCoerce @_ @_ @PVestingDatum ownInputDatumF.extraData)
-      -- PPubKeyCredential ((pfield @"_0" #) -> beneficiaryHash) <- pmatch (pfield @"credential" # vestingDatumF.beneficiary)
-      -- let currentTimeApproximation = pfromData $ pvalidityRangeStart # info.validRange 
-      --     vestingTimeRemaining = (pfromData claimConfigF.vestingPeriodEnd) - currentTimeApproximation
-      --     vestingPeriodLength = (pfromData claimConfigF.vestingPeriodEnd) - (pfromData claimConfigF.vestingPeriodStart)
-      --     timeBetweenInstallments = pdivCeil # vestingPeriodLength # totalVestingInstallments
-      --     futureInstallments = pdivCeil # vestingTimeRemaining # timeBetweenInstallments
-
-      -- ownInputVal <- plet $ pforgetPositive ownInputF.value
-      -- inputVestingTokens <- plet $ pvalueOf # ownInputVal # pconstant airdropTokenCS # claimTokenTN 
-      -- let vestingTokenDelta = expectedRemainingQty - inputVestingTokens 
-      --     claimedTokens = Value.psingleton # pconstant airdropTokenCS # claimTokenTN # vestingTokenDelta
-      --     checks = 
-      --       pand'List
-      --        [ (pto ownInDat) #== (pto ownOutputDatum)
-      --        , pelem # beneficiaryHash # info.signatories
-      --        , pfromData info.mint #== mempty
-      --        , (ownInputVal <> claimedTokens) #== pforgetPositive ownOutputF.value
-      --        ]
-      -- pif checks 
-      --     (pconstant ()) 
-      --     perror 
   
 -- TODO PlaceHolder # This contribution holds only the minimum amount of Ada + the FoldingFee, it cannot be updated. It cannot be removed until the reward fold has completed.

@@ -20,6 +20,7 @@ import Plutarch.Monadic qualified as P
 import Data.Word (Word8)
 import Testing.MerklePatriciaForestry qualified as MPF
 import Testing.Crypto qualified as Crypto
+import Testing.AirdropValidator qualified as AirdropValidator 
 
 genByteString :: Gen BS.ByteString
 genByteString = do
@@ -117,4 +118,5 @@ tests = testGroup "Helper Tests"
       ]
   , MPF.tests
   , Crypto.tests 
+  , AirdropValidator.tests
   ]

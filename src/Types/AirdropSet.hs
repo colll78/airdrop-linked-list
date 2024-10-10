@@ -2,6 +2,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
+{-# OPTIONS_GHC -Wno-missing-export-lists #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Types.AirdropSet where
@@ -111,7 +112,7 @@ instance DerivePlutusType PClaimValidatorConfig where type DPTStrat _ = PlutusTy
 
 data AirdropConfig = AirdropConfig
   { initUTxO :: TxOutRef
-  , totalVestingQty :: POSIXTime
+  , claimDeadline :: POSIXTime
   , claimRoot :: MerklePatriciaForestry 
   , vestingPeriodEnd :: Integer
   }

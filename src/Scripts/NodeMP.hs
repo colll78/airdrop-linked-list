@@ -15,7 +15,7 @@ defaultParams :: AirdropConfig
 defaultParams = 
   AirdropConfig 
     { initUTxO = TxOutRef "deadbeef" 0
-    , totalVestingQty  = POSIXTime 100
+    , claimDeadline  = POSIXTime 100
     , claimRoot = MerklePatriciaForestry "74c61b3b5584c4434f03bc9acbe31d2d2186576e257f1fd85c997916d6df5715"
     , vestingPeriodEnd = 100  
     }

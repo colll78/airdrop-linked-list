@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Testing.Eval (evalT, evalWithArgsT, psucceeds, passert, ptraces, toHexString, toBuiltinHexString) where
+module Testing.Eval (evalT, evalWithArgsT, psucceeds, passert, ptraces, toHexString, toBuiltinHexString, writeScriptBytesFile) where
 
 import Cardano.Binary qualified as CBOR
 import Data.Aeson (KeyValue ((.=)), object)
@@ -22,6 +22,7 @@ import Plutarch (
   LogLevel (..), 
   compile,
   printScript,
+  prettyScript,
  )
 import Plutarch.Evaluate (
   evalScript,
@@ -29,7 +30,7 @@ import Plutarch.Evaluate (
   applyArguments,
  )
 import Plutarch.Prelude
-import Plutarch.Script (Script, serialiseScript)
+import Plutarch.Script (Script, serialiseScript, deserialiseScript)
 import PlutusLedgerApi.V2 (
   Data,
   ExBudget,
@@ -40,6 +41,11 @@ import Data.Char (toLower)
 import PlutusLedgerApi.V2 (BuiltinByteString)
 import PlutusTx.Prelude qualified as P
 import qualified Data.ByteString as BS
+import Data.ByteString.Short (toShort)
+import Data.Text qualified as T
+import Prettyprinter (defaultLayoutOptions, layoutPretty)
+import Prettyprinter.Render.String (renderString)
+import Data.Text.IO qualified 
 
 encodeSerialiseCBOR :: Script -> Text
 encodeSerialiseCBOR = Text.decodeUtf8 . Base16.encode . CBOR.serialize' . serialiseScript
@@ -78,13 +84,13 @@ writePlutusScriptNoTrace title filepath term =
   writePlutusScript NoTracing title filepath term
 
 comp :: ClosedTerm a -> Script
-comp t = either (error . unpack) id $ compile (Tracing LogInfo DetTracing) t
+comp t = either (error . unpack) id $ compile (Tracing LogInfo DoTracing) t
 
 -- | Asserts the term evaluates successfully without failing
 psucceeds :: ClosedTerm a -> Assertion
 psucceeds p =
   case evalScriptHuge $ comp p of
-    (Left _, _, trc) -> assertFailure ("Term failed to evaluate" ++ show trc)
+    (Left _, _, trc) -> assertFailure ("Term failed to evaluate: " ++ show trc)
     (Right _, _, _) -> pure ()
 
 pscriptShouldBe :: Script -> Script -> Assertion
@@ -149,3 +155,9 @@ hexDigitToWord8 = f . toLower
     f 'e' = 14
     f 'f' = 15
     f c = error ("InvalidHexDigit " <> [c])
+
+writeScriptBytesFile :: FilePath -> BS.ByteString -> IO ()
+writeScriptBytesFile path script = do
+  let scriptBytes = deserialiseScript (toShort script)
+      renderedScript = renderString $ layoutPretty defaultLayoutOptions (prettyScript scriptBytes)
+  Data.Text.IO.writeFile path (T.pack renderedScript)
