@@ -21,9 +21,9 @@ import AirdropEvent.Mint.Common (
 
 import Plutarch.Prelude
 import Airdrop.Utils (pand'List, passert, pcond, pisFinite, phasUTxO, pintToByteString)
-import Types.AirdropSet (PAirdropConfig (..), PAirdropNodeAction (..), PSignatureType(..), PVestingDatum(..))
+import Types.AirdropSet (PAirdropConfig (..), PAirdropNodeAction (..), PSignatureType(..), PVestingDatum(..), PNetwork(..), pletFieldsSignature)
 import Types.Constants (claimRoot, airdropOperator)
-import Airdrop.Crypto (pethereumPubKeyToPubKeyHash, pcompressPublicKey)
+import Airdrop.Crypto (pcardanoPubKeyToPubKeyHash, pethereumPubKeyToPubKeyHash, pcompressPublicKey)
 import Plutarch.Builtin (pserialiseData, pforgetData, PDataNewtype(..))
 import MerkleTree.MerklePatriciaForestry (phas)
 import Plutarch.Crypto (pverifyEcdsaSecp256k1Signature, pblake2b_256)
@@ -63,28 +63,49 @@ mkAirdropNodeMP = plam $ \claimConfig redm ctx -> P.do
     PLInsert action -> P.do
       claimConfigF <- pletFields @'["claimDeadline"] claimConfig
       act <- pletFields @'["keyToInsert", "claimData"] action
-
       pkToInsert <- plet act.keyToInsert
-      EcdsaSecpSignature claimData <- pmatch act.claimData 
-      claimDataF <- pletFields @'["signature", "amount", "claimAddr", "proof"] claimData
+      actClaimData <- plet act.claimData
+      -- @'["signature", "amount", "claimAddr", "proof", "network"]
+      claimDataF <- pletFieldsSignature (pforgetData actClaimData)
       claimAddress <- plet $ claimDataF.claimAddr 
       claimAmount <- plet $ claimDataF.amount
       let expectedVesting = pdata $ pcon $ PVestingDatum $ 
             pdcons @"beneficiary" # claimAddress
               #$ pdcons @"totalVestingQty" # claimAmount
-              #$ pdnil   
+              #$ pdnil  
           msg = pblake2b_256 #$ pserialiseData # pforgetData claimAddress
-          eth_compressed_pub_key = pcompressPublicKey pkToInsert
+      pmatch (pfromData actClaimData) $ \case 
+        Ed25519Signature _ -> P.do 
+          pkhToInsert <- plet $ pcardanoPubKeyToPubKeyHash # pkToInsert
+          let pkhToCheck = pdata $ pcon $ PPubKeyHash $ pcon $ PDataNewtype $ pdata $ pcardanoPubKeyToPubKeyHash # pkToInsert
+              signatureCheck = 
+                pmatch claimDataF.network $ \case 
+                  PCardano -> (pelem # pkhToCheck # sigs)
+                  _ -> perror 
+              insertChecks =
+                pand'List
+                  [ pisFinite # vrange
+                  , pafter # claimConfigF.claimDeadline # vrange
+                  , signatureCheck
+                  , phas # claimRoot # pkhToInsert # (pintToByteString # pfromData claimAmount) # claimDataF.proof
+                  ]
+          pif insertChecks (pInsert common # pdata pkhToInsert # expectedVesting) perror       
+        SchnorrSignature _claimData -> P.do 
+          perror 
+        EcdsaSecpSignature _ -> P.do 
+          let eth_compressed_pub_key = pcompressPublicKey pkToInsert
 
-      pkhToInsert <- plet $ pethereumPubKeyToPubKeyHash # pkToInsert
-      let insertChecks =
-            pand'List
-              [ pisFinite # vrange
-              , pafter # claimConfigF.claimDeadline # vrange
-              , (pverifyEcdsaSecp256k1Signature # eth_compressed_pub_key # msg # claimDataF.signature)
-              , phas # claimRoot # pkhToInsert # (pintToByteString # pfromData claimAmount) # claimDataF.proof
-              ]
-      pif insertChecks (pInsert common # pdata pkhToInsert # expectedVesting) perror
+          pkhToInsert <- plet $ pethereumPubKeyToPubKeyHash # pkToInsert
+          let insertChecks =
+                pand'List
+                  [ pisFinite # vrange
+                  , pafter # claimConfigF.claimDeadline # vrange
+                  , (pverifyEcdsaSecp256k1Signature # eth_compressed_pub_key # msg # claimDataF.signature)
+                  , phas # claimRoot # pkhToInsert # (pintToByteString # pfromData claimAmount) # claimDataF.proof
+                  ]
+          pif insertChecks (pInsert common # pdata pkhToInsert # expectedVesting) perror
+
+
     PLRemove action -> P.do 
       claimConfigF <- pletFields @'["vestingPeriodEnd"] claimConfig
       act <- pletFields @'["keyToRemove"] action

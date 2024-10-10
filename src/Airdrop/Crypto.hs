@@ -1,4 +1,5 @@
 module Airdrop.Crypto (
+  pcardanoPubKeyToPubKeyHash,
   pethereumPubKeyToPubKeyHash,
   pcompressPublicKey,
   scriptHashV3
@@ -13,7 +14,7 @@ import Plutarch (
   plam,
  )
 import Plutarch.ByteString (PByteString, plengthBS, psliceBS, pindexBS)
-import Plutarch.Crypto (pkeccak_256)
+import Plutarch.Crypto (pkeccak_256, pblake2b_224)
 import Plutarch.Integer (PInteger, pmod)
 import Plutarch.Lift (pconstant) 
 import Plutarch.Bool (pif, (#==))
@@ -32,6 +33,9 @@ hashScriptWithPrefix :: Word8 -> Script -> ByteString
 hashScriptWithPrefix prefix scr = 
   Hash.blake2b_224
     $ BS.singleton prefix <> (fromShort . serialiseUPLC . unScript $ scr)
+
+pcardanoPubKeyToPubKeyHash :: Term s (PByteString :--> PByteString)
+pcardanoPubKeyToPubKeyHash = phoistAcyclic $ plam $ \pubKey -> pblake2b_224 # pubKey
 
 pethereumPubKeyToPubKeyHash :: Term s (PByteString :--> PByteString)
 pethereumPubKeyToPubKeyHash = phoistAcyclic $ plam $ \pubKey -> 

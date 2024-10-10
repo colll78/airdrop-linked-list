@@ -178,40 +178,6 @@ calculateFutureInstallments (POSIXTime currentTime) vestingEnd betweenTrenches =
         futureInstallments = divCeil vestingTimeRemaining betweenTrenches
     in max 0 futureInstallments
 
--- computeExpectedOutput :: AirdropGlobalLogicConfig -> POSIXTimeRange -> TxInInfo -> TxOut
--- computeExpectedOutput glConfig validRange txIn = 
---     let input = txInInfoResolved txIn
---         MkAirdropSetNode {key, next, committed = VestingDatum {beneficiary, totalVestingQty}} = unsafeFromBuiltinData $ getOutputDatum $ txOutDatum input
---         remainingQty = Value.valueOf (txOutValue input) airdropTokenCS (plift claimTokenTN)
-        
---         (POSIXTime currentTimeApproximation) = getLowerBound validRange
---         vestingTimeRemaining = (vestingPeriodEnd glConfig) - currentTimeApproximation
---         futureInstallments = divCeil vestingTimeRemaining (timeBetweenInstallments glConfig)
-        
---         expectedRemainingQty = (futureInstallments * totalVestingQty) `divCeil` (plift totalVestingInstallments)
---         newRemainingQty = max expectedRemainingQty remainingQty
---         phk = case (addressCredential beneficiary) of 
---                 PubKeyCredential cred -> cred 
---                 _ -> error "computeExpectedOutput: expected payment cred"
---     in airdropValidatorTxOut 
---         (toPubKeyHash key)
---         (toPubKeyHash next)
---         phk
---         totalVestingQty
---         newRemainingQty
---   where
---     toPubKeyHash (Key bs) = bs
---     toPubKeyHash Empty = ""
---     getLowerBound (Interval lower _) = 
---         case lower of
---             LowerBound (Finite time) _ -> time
---             _ -> error "Invalid lower bound"
-
---     getOutputDatum d = 
---       case d of 
---         OutputDatum d' -> getDatum d' 
---         _ -> error "getOutputDatum: Expected InlineDatum"
-
 createTestTxInfo :: AirdropGlobalLogicConfig -> [TxInInfo] -> TxInfo
 createTestTxInfo glConfig inputs =
     let betweenTrenches = timeBetweenInstallments glConfig
@@ -264,6 +230,7 @@ mockInputs :: [TxInInfo]
 mockInputs = 
   [ airdropValidatorUTxO "key1" "key2" mockPKH 15_000_000 15_000_000
   , airdropValidatorUTxO "key2" "key3" mockPKH 10_000_000 10_000_000
+  , airdropValidatorUTxO "key5" "key6" mockPKH 23_000_000 23_000_000
   ]
 
 succeedsAirdropGlobalScriptContext :: AirdropGlobalLogicConfig -> ScriptContext  

@@ -20,10 +20,12 @@ import PlutusLedgerApi.V3 (TxOutRef)
 import PlutusTx qualified
 import Types.Classes 
 import Plutarch.Unsafe (punsafeCoerce)
-import Plutarch.Builtin (PDataNewtype (PDataNewtype), pforgetData)
+import Plutarch.Builtin
 import MerkleTree.MerklePatriciaForestry (PMerklePatriciaForestry (..), PProof(..), MerklePatriciaForestry)
 import Airdrop.Utils (pcond, pand'List)
 import Plutarch.Internal.PlutusType (pcon', pmatch')
+import Plutarch.DataRepr.Internal.Field
+    ( HRec(..), Labeled(Labeled) )  
 
 data NodeKey = Key BuiltinByteString | Empty
   deriving stock (Show, Eq, Ord, Generic)
@@ -313,6 +315,43 @@ instance PlutusType PNetwork where
       , ((x #== 3), (f PSolana))
       ]
       perror 
+
+instance PIsData PNetwork where
+    pfromDataImpl d =
+        punsafeCoerce (pfromDataImpl @PInteger $ punsafeCoerce d)
+
+    pdataImpl x =
+        pdataImpl $ pto x
+
+type PSignatureTypeHrec (s :: S) =
+  HRec
+    '[ '("signature", Term s (PAsData PByteString))
+     , '("network", Term s (PAsData PNetwork))
+     , '("amount", Term s (PAsData PInteger))
+     , '("claimAddr", Term s (PAsData PAddress))
+     , '("proof", Term s (PAsData PProof))
+     ]
+
+pletFieldsSignature :: forall {s :: S} {r :: PType}. Term s PData -> (PSignatureTypeHrec s -> Term s r) -> Term s r 
+pletFieldsSignature term = runTermCont $ do
+  constrPair <- tcont $ plet $ pasConstr # term
+  fields <- tcont $ plet $ psndBuiltin # constrPair
+  let signature = punsafeCoerce @_ @_ @(PAsData PByteString) $ phead # fields
+  fields1 <- tcont $ plet (ptail # fields)
+  let network = punsafeCoerce @_ @_ @(PAsData PNetwork) $ phead # fields1
+  fields2 <- tcont $ plet (ptail # fields1)
+  let amount = punsafeCoerce @_ @_ @(PAsData PInteger) $ phead # fields2
+  fields3 <- tcont $ plet (ptail # fields2)
+  let claimAddr = punsafeCoerce @_ @_ @(PAsData PAddress) $ phead # fields3
+  fields4 <- tcont $ plet (ptail # fields3)
+  let proof = punsafeCoerce @_ @_ @(PAsData PProof) $ phead # fields4
+  tcont $ \f -> f $ HCons (Labeled @"signature" signature)
+               $ HCons (Labeled @"network" network)
+               $ HCons (Labeled @"amount" amount)
+               $ HCons (Labeled @"claimAddr" claimAddr)
+               $ HCons (Labeled @"proof" proof) HNil
+
+
 
 data PAirdropMintAction (s :: S)
   = PMintAirdrop (Term s (PDataRecord '[]))
