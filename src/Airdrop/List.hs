@@ -128,14 +128,24 @@ pbuiltinListLength acc =
   )
   # acc
 
-pbuiltinListLengthFast :: (PElemConstraint PBuiltinList a) => Term s (PInteger :--> PBuiltinList a :--> PInteger)
-pbuiltinListLengthFast = phoistAcyclic $ plam $ \n xs ->
-  pcond 
-    [ ((30 #<= n), ((pbuiltinListLength 30) # (nTails 30 xs)))
-    , ((20 #<= n), ((pbuiltinListLength 20) # (nTails 20 xs)))
-    , ((10 #<= n), ((pbuiltinListLength 10) # (nTails 10 xs)))
-    ]
-    (pbuiltinListLength 0 # xs)
+tails10 :: PIsListLike list a => ClosedTerm (list a :--> list a)
+tails10 = phoistAcyclic $ plam (nTails 10)
+tails20 :: PIsListLike list a => ClosedTerm (list a :--> list a)
+tails20 = phoistAcyclic $ plam (\xs -> tails10 # (tails10 # xs))
+tails30 :: PIsListLike list a => ClosedTerm (list a :--> list a)
+tails30 = phoistAcyclic $ plam (\xs -> tails20 # (tails10 # xs))
+
+pbuiltinListLengthFast :: forall (a :: PType) (s :: S). (PElemConstraint PBuiltinList a) => Term s (PInteger :--> PBuiltinList a :--> PInteger)
+pbuiltinListLengthFast = phoistAcyclic $ plam $ \n elems ->
+  let go :: Term _ (PInteger :--> PInteger :--> PBuiltinList a :--> PInteger)
+      go = pfix #$ plam $ \self remainingExpected currentCount xs ->
+             pcond 
+               [ ((30 #<= remainingExpected), (self # (remainingExpected - 30) # (currentCount + 30) # (tails30 # xs)))
+               , ((20 #<= remainingExpected), (self # (remainingExpected - 20) # (currentCount + 20) # (tails20 # xs)))
+               , ((10 #<= remainingExpected), (self # (remainingExpected - 10) # (currentCount + 10) # (tails10 # xs)))
+               ]
+               (pbuiltinListLength 0 # xs)
+   in go # n # 0 # elems 
 
 penforceNSpendRedeemers :: forall {s :: S}. Term s PInteger -> Term s (AssocMap.PMap 'AssocMap.Unsorted PScriptPurpose PRedeemer) -> Term s PBool
 penforceNSpendRedeemers n rdmrs =

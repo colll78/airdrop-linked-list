@@ -76,13 +76,16 @@ mkAirdropNodeMP = plam $ \claimConfig redm ctx -> P.do
           msg = pblake2b_256 #$ pserialiseData # pforgetData claimAddress
       pmatch (pfromData actClaimData) $ \case 
         Ed25519Signature _ -> P.do 
-          pkhToInsert <- plet $ pcardanoPubKeyToPubKeyHash # pkToInsert
-          let pkhToCheck = pdata $ pcon $ PPubKeyHash $ pcon $ PDataNewtype $ pdata $ pcardanoPubKeyToPubKeyHash # pkToInsert
-              signatureCheck = 
-                pmatch claimDataF.network $ \case 
-                  PCardano -> (pelem # pkhToCheck # sigs)
-                  _ -> perror 
-              insertChecks =
+          (signatureCheck, pkhToInsert) <- runTermCont $ do 
+            networkId <- tcont $ pmatch claimDataF.network
+            case networkId of 
+              PCardano -> do
+                pkhToInsert <- tcont $ plet $ pcardanoPubKeyToPubKeyHash # pkToInsert
+                let pkhToCheck = pdata $ pcon $ PPubKeyHash $ pcon $ PDataNewtype $ pdata $ pkhToInsert
+                pure ((pelem # pkhToCheck # sigs), pkhToInsert)
+              _ -> do
+                pure (perror, perror)  
+          let insertChecks =
                 pand'List
                   [ pisFinite # vrange
                   , pafter # claimConfigF.claimDeadline # vrange
